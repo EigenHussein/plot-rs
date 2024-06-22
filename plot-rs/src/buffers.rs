@@ -69,8 +69,16 @@ impl GLAttrib {
     }
 }
 pub struct VAO {
-    vao: u32,
+    vao: Option<u32>,
     attributes: Vec<GLAttrib>,
+}
+impl Default for VAO {
+    fn default() -> Self {
+        Self {
+            vao: None,
+            attributes: Vec::new(),
+        }
+    }
 }
 impl VAO {
     fn new() -> Self {
@@ -79,23 +87,32 @@ impl VAO {
             gl::GenVertexArrays(1, &mut vao);
         }
         Self {
-            vao: vao,
+            vao: Some(vao),
             attributes: Vec::new(),
         }
     }
-    fn set_attributes(&mut self, attribs: &Vec<GLAttrib>) -> &mut Self {
+    fn set_attributes(&mut self, attribs: &Vec<GLAttrib>) -> Result<&mut Self, ()> {
+        if self.vao.is_none() {
+            return Err(());
+        }
         self.attributes = attribs.clone();
-        self
+        return Ok(self);
     }
-    fn bind_attributes_to_vao(&mut self) -> &mut Self {
+    fn bind_attributes_to_vao(&mut self) -> Result<&mut Self, ()> {
+        if self.vao.is_none() {
+            return Err(());
+        }
         self.bind();
         for attr in self.attributes.iter() {
             attr.set();
         }
-        self
+        Ok(self)
     }
     pub fn bind(&self) {
-        unsafe { gl::BindVertexArray(self.vao) };
+        if self.vao.is_none() {
+            print_error("Error: None initialized VAO!");
+        }
+        unsafe { gl::BindVertexArray(self.vao.unwrap_or(0)) };
     }
     pub fn unbind(&self) {
         unsafe { gl::BindVertexArray(0) }
@@ -104,8 +121,10 @@ impl VAO {
 impl Drop for VAO {
     fn drop(&mut self) {
         print_error("Dropped VAO");
-        unsafe {
-            gl::DeleteVertexArrays(1, &self.vao);
+        if self.vao.is_some() {
+            unsafe {
+                gl::DeleteVertexArrays(1, &self.vao.unwrap());
+            }
         }
     }
 }
@@ -293,6 +312,16 @@ pub struct ArrayBuffer {
     pub ebo: EBO,
 }
 
+impl Default for ArrayBuffer {
+    fn default() -> Self {
+        Self {
+            vao:Default::default(),
+            vbo:Default::default(),
+            ebo:Default::default(),
+        }
+    }
+}
+
 impl ArrayBuffer {
     pub fn default_buffer_from_slice<VertexStructure>(
         vertices: &[VertexStructure],
@@ -305,7 +334,9 @@ impl ArrayBuffer {
         let vbo = VBO::array_buffer_from_slice(vertices, static_buffer);
 
         vao.set_attributes(buffer_data_attributes)
-            .bind_attributes_to_vao();
+            .unwrap()
+            .bind_attributes_to_vao()
+            .unwrap();
 
         let ebo = if let Some(valid_indices) = indices {
             Some(EBO::new(valid_indices, static_buffer))
