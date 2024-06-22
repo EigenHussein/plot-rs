@@ -1,0 +1,19 @@
+[package]
+name = "plotters"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+assimp = "0.3.1"
+freetype-rs = "0.37.0"
+gl = "0.14.0"
+glfw = "0.57.0"
+glm = "0.2.3"
+image = "0.25.1"
+nalgebra-glm = "0.18.0"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
+
+
+plot-rs = {path = "plot-rs"}
+typed-builder = "0.18.2"
