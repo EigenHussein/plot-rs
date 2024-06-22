@@ -1,5 +1,12 @@
 use std::mem::size_of;
 
+#[cfg(debug_assertions)]
+fn print_error(msg: &'static str) {
+    println!("{}", msg);
+}
+#[cfg(not(debug_assertions))]
+fn print_error(msg: &'static str) {}
+
 pub struct GLAttrib {
     // valid: bool,
     attribute_index: u32,
@@ -95,15 +102,8 @@ impl VAO {
     }
 }
 impl Drop for VAO {
-    #[cfg(debug_assertions)]
     fn drop(&mut self) {
-        println!("Dropped VAO");
-        unsafe {
-            gl::DeleteVertexArrays(1, &self.vao);
-        }
-    }
-    #[cfg(not(debug_assertions))]
-    fn drop(&mut self) {
+        print_error("Dropped VAO");
         unsafe {
             gl::DeleteVertexArrays(1, &self.vao);
         }
@@ -111,13 +111,23 @@ impl Drop for VAO {
 }
 
 pub struct VBO {
+    vbo: Option<u32>,
     buffer_type: u32,
-    vbo: u32,
     element_size: usize,
     element_count: usize,
     buffer_size: usize,
 }
-
+impl Default for VBO {
+    fn default() -> Self {
+        Self {
+            vbo: None,
+            buffer_type: 0,
+            element_size: 0,
+            element_count: 0,
+            buffer_size: 0,
+        }
+    }
+}
 impl VBO {
     pub fn array_buffer_from_slice<VertexStructure>(
         vertices: &[VertexStructure],
@@ -145,7 +155,7 @@ impl VBO {
 
         Self {
             buffer_type: gl::ARRAY_BUFFER,
-            vbo: vbo,
+            vbo: Some(vbo),
             element_count: number_of_vertices,
             element_size: size_of_vertex,
             buffer_size: size_of_vertex * number_of_vertices,
@@ -174,7 +184,7 @@ impl VBO {
 
         Self {
             buffer_type: gl::ARRAY_BUFFER,
-            vbo: vbo,
+            vbo: Some(vbo),
             element_size: 1,
             element_count: buffer_size_in_bytes,
             buffer_size: buffer_size_in_bytes,
@@ -194,7 +204,7 @@ impl VBO {
 
         unsafe {
             gl::NamedBufferSubData(
-                self.vbo,
+                self.vbo.expect("None intialized VBO"),
                 (element_offset * self.element_size) as _,
                 (update_size * self.element_size) as _,
                 new_vertices.as_ptr() as _,
@@ -204,7 +214,7 @@ impl VBO {
         self
     }
     pub fn bind(&self) {
-        unsafe { gl::BindBuffer(self.buffer_type, self.vbo) };
+        unsafe { gl::BindBuffer(self.buffer_type, self.vbo.expect("None intialized VBO")) };
     }
     pub fn unbind(&self) {
         unsafe { gl::BindBuffer(self.buffer_type, 0) }
@@ -212,20 +222,23 @@ impl VBO {
 }
 
 impl Drop for VBO {
-    #[cfg(debug_assertions)]
     fn drop(&mut self) {
-        println!("Dropped VBO!");
-        unsafe { gl::DeleteBuffers(1, &self.vbo) }
-    }
-    #[cfg(not(debug_assertions))]
-    fn drop(&mut self) {
-        unsafe { gl::DeleteBuffers(1, &self.vbo) }
+        print_error("Dropped VBO!");
+        unsafe { gl::DeleteBuffers(1, &self.vbo.expect("None intialized VBO")) }
     }
 }
 
-struct EBO {
-    ebo: u32,
+pub struct EBO {
+    ebo: Option<u32>,
     n_indices: usize,
+}
+impl Default for EBO {
+    fn default() -> Self {
+        Self {
+            ebo: None,
+            n_indices: 0,
+        }
+    }
 }
 
 impl EBO {
@@ -247,56 +260,63 @@ impl EBO {
         }
 
         Self {
-            ebo: ebo,
+            ebo: Some(ebo),
             n_indices: indices.len(),
         }
     }
     pub fn bind(&self) {
-        unsafe { gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.ebo) };
+        unsafe {
+            gl::BindBuffer(
+                gl::ELEMENT_ARRAY_BUFFER,
+                self.ebo.expect("None intialized EBO"),
+            )
+        };
     }
     pub fn unbind(&self) {
         unsafe { gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, 0) }
     }
 }
 impl Drop for EBO {
-    #[cfg(debug_assertions)]
     fn drop(&mut self) {
-        println!("Dropped EBO!");
-        unsafe {
-            gl::DeleteBuffers(1, &self.ebo);
-        }
-    }
-    #[cfg(not(debug_assertions))]
-    fn drop(&mut self) {
-        unsafe {
-            gl::DeleteBuffers(1, &self.ebo);
+        if self.ebo.is_some() {
+            print_error("Dropped EBO!");
+            unsafe {
+                gl::DeleteBuffers(1, &self.ebo.unwrap());
+            }
         }
     }
 }
 
 pub struct ArrayBuffer {
     pub vao: VAO,
-    pub vbo: Option<VBO>,
-    pub ebo: Option<VBO>,
+    pub vbo: VBO,
+    pub ebo: EBO,
 }
 
 impl ArrayBuffer {
     pub fn default_buffer_from_slice<VertexStructure>(
         vertices: &[VertexStructure],
+        indices: Option<&[u32]>,
         buffer_data_attributes: &Vec<GLAttrib>,
         static_buffer: bool,
     ) -> Self {
         let mut vao = VAO::new();
-      
+
         let vbo = VBO::array_buffer_from_slice(vertices, static_buffer);
-        
+
         vao.set_attributes(buffer_data_attributes)
-        .bind_attributes_to_vao();
+            .bind_attributes_to_vao();
+
+        let ebo = if let Some(valid_indices) = indices {
+            Some(EBO::new(valid_indices, static_buffer))
+        } else {
+            None
+        };
 
         ArrayBuffer {
             vao: vao,
-            vbo: Some(vbo),
-            ebo: None,
+            vbo: vbo,
+            ebo: ebo.unwrap_or_default(),
         }
     }
 }
