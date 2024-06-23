@@ -52,6 +52,7 @@ impl<'a> Camera {
             m_view: view,
             m_model: nalgebra_glm::Mat4::identity(),
         }
+     
     }
 
     pub fn set_perspective(&mut self, aspect: f32, fovy: f32, near: f32, far: f32) -> &mut Self {
@@ -220,6 +221,7 @@ impl Default for CameraView {
 impl CameraView {
     pub fn update_matrix(&mut self) -> &mut Self {
         self.view_matrix = nalgebra_glm::look_at(&self.eye, &self.center, &self.up);
+        print!("{:?}",self.view_matrix);
         println!("{:?}", self.eye);
         self
     }

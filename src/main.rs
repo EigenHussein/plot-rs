@@ -1,4 +1,4 @@
-use glfw::Context;
+use glfw::{Action, Context, WindowEvent};
 use nalgebra_glm::Vec3;
 use plot_rs::{
     buffers::{ArrayBuffer, GLAttrib},
@@ -55,14 +55,19 @@ fn main() {
         &[GLAttrib::new(0, 3, 3, 0)].to_vec(),
         true,
     );
-    
+
     buffer.ebo.unbind();
 
     let mut cam = Camera::default();
+//cam.set_camera(&Vec3::new(1.0, 1.0, -1.0), &Vec3::zeros(), &Vec3::z());
     cam.add_program(shader.get_id()).update_uniforms();
 
     while !window.m_window.should_close() {
         window.m_glfw.poll_events();
+
+        for (_, event) in glfw::flush_messages(&window.m_receiver) {
+            update_camera(&event, &mut cam);
+        }
 
         unsafe {
             gl::ClearColor(0.1, 0.1, 0.1, 1.0);
@@ -70,9 +75,52 @@ fn main() {
             gl::UseProgram(shader.get_id());
             buffer.vao.bind();
             buffer.ebo.bind();
-            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT,0 as _);
+            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as _);
         }
 
         window.m_window.swap_buffers();
     }
+}
+
+fn update_camera(ev: &WindowEvent, camera_instance: &mut Camera) {
+    match ev {
+        WindowEvent::Key(key, scancode, action, modifier) => {
+            let act = *action;
+            if *action == Action::Repeat || *action == Action::Press {
+                match *key {
+                    glfw::Key::A => {
+                        camera_instance
+                            .get_camera_view()
+                            .increase_azimuth(0.02)
+                            .update_matrix();
+                        camera_instance.update_uniforms();
+                    }
+                    glfw::Key::D => {
+                        camera_instance
+                            .get_camera_view()
+                            .decrease_azimuth(0.02)
+                            .update_matrix();
+                        camera_instance.update_uniforms();
+                    }
+                    glfw::Key::W => {
+                        camera_instance
+                            .get_camera_view()
+                            .increase_altitude(0.02)
+                            .update_matrix();
+                        camera_instance.update_uniforms();
+                    }
+                    glfw::Key::S => {
+                        camera_instance
+                            .get_camera_view()
+                            .decrease_altitude(0.02)
+                            .update_matrix();
+                        camera_instance.update_uniforms();
+                    }
+
+                    _ => {}
+                };
+            }
+        }
+        _ => {}
+    };
 }
