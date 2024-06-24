@@ -210,6 +210,8 @@ impl ShaderAttribute {
     /// let vertex_input = new_vertex_input(0, "pos", ShaderAttributeType::Vec3);
     /// // Generates: "layout(location = 0) in vec3 pos;"
     /// ```
+    ///
+    /// * Default input attributes are [ `position`, `normal`, `color`, `txcoord`]
     pub fn new_input_attribute(
         input_attrib_index: Option<u32>,
         name: String,
@@ -505,11 +507,11 @@ impl ShaderBuilder {
 
     pub fn add_vertex2fragment_link(
         &mut self,
-        inout_attrib: ShaderAttribute,
+        out_attrib: ShaderAttribute,
         vertex_variable: String,
     ) -> &mut Self {
         self.vertex_fragment_links
-            .push((inout_attrib, vertex_variable));
+            .push((out_attrib, vertex_variable));
         self
     }
 
@@ -549,7 +551,13 @@ impl RawShader {
     pub fn get_id(&self) -> u32 {
         self.0
     }
+    pub fn use_shader(&self) {
+        unsafe {
+            gl::UseProgram(self.0);
+        }
+    }
 }
+
 impl Drop for RawShader {
     fn drop(&mut self) {
         unsafe {

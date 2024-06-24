@@ -220,18 +220,39 @@ impl VBO {
         } else {
             new_vertices.len() * self.element_size
         };
-
+        // println!(
+        //     "Updating: {:?}",
+        //     (
+        //         update_size,
+        //         element_offset,
+        //         self.element_count,
+        //         self.element_size
+        //     )
+        // );
+        // println!("{}", self.vbo.unwrap());
         unsafe {
-            gl::NamedBufferSubData(
-                self.vbo.expect("None intialized VBO"),
+            gl::BindBuffer(gl::ARRAY_BUFFER, self.vbo.unwrap());
+            gl::BufferSubData(
+                gl::ARRAY_BUFFER,
                 (element_offset * self.element_size) as _,
-                (update_size * self.element_size) as _,
+                (update_size) as _,
                 new_vertices.as_ptr() as _,
-            )
+            );
+            // gl::NamedBufferSubData(
+            //     self.vbo.expect("None intialized VBO"),
+            //     (element_offset * self.element_size) as _,
+            //     (update_size) as _,
+            //     new_vertices.as_ptr() as _,
+            // )
         }
 
         self
     }
+
+    // pub fn get_number_of_vertices(&self) -> usize {
+    //     self.element_count
+    // }
+
     pub fn bind(&self) {
         unsafe { gl::BindBuffer(self.buffer_type, self.vbo.expect("None intialized VBO")) };
     }
@@ -315,14 +336,17 @@ pub struct ArrayBuffer {
 impl Default for ArrayBuffer {
     fn default() -> Self {
         Self {
-            vao:Default::default(),
-            vbo:Default::default(),
-            ebo:Default::default(),
+            vao: Default::default(),
+            vbo: Default::default(),
+            ebo: Default::default(),
         }
     }
 }
 
 impl ArrayBuffer {
+    pub fn uninitialized() -> Self {
+        Default::default()
+    }
     pub fn default_buffer_from_slice<VertexStructure>(
         vertices: &[VertexStructure],
         indices: Option<&[u32]>,

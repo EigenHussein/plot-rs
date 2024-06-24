@@ -1,9 +1,11 @@
-use std::{collections::HashMap, ffi::{c_void, CString}};
+use std::{
+    collections::HashMap,
+    ffi::{c_void, CString},
+};
 
 use nalgebra_glm::{Mat4, Vec3, Vec4};
 
 use crate::shader_builder::ShaderUniforms;
-
 
 pub struct Camera {
     programs: Vec<ShaderUniforms>,
@@ -52,7 +54,6 @@ impl<'a> Camera {
             m_view: view,
             m_model: nalgebra_glm::Mat4::identity(),
         }
-     
     }
 
     pub fn set_perspective(&mut self, aspect: f32, fovy: f32, near: f32, far: f32) -> &mut Self {
@@ -115,17 +116,45 @@ impl<'a> Camera {
     /// ### Development Requirement
     /// * implement auto-delete mechanism for
     pub fn add_program(&mut self, program_id: u32) -> &mut Self {
-        self.programs.push(ShaderUniforms::new(program_id));
+        let mut prog = ShaderUniforms::new(program_id);
+        unsafe {
+            gl::UseProgram(prog.program_id);
+        }
+        println!("{:?}", self.m_view.eye);
+        prog.uniform_matrix4(&self.uniforms_names[0], 0, self.m_projection.as_ptr() as _);
+        prog.uniform_matrix4(
+            &self.uniforms_names[1],
+            0,
+            self.m_view.view_matrix.as_ptr() as _,
+        );
+        prog.uniform_matrix4(&self.uniforms_names[2], 0, self.m_model.as_ptr() as _);
+        self.programs.push(prog);
         self
     }
+    fn update_specific_uniforms(&mut self, uniforms: &mut ShaderUniforms) -> &mut Self {
+        unsafe {
+            gl::UseProgram(uniforms.program_id);
+        }
+        println!("{:?}", self.m_view.eye);
+        uniforms.uniform_matrix4(&self.uniforms_names[0], 0, self.m_projection.as_ptr() as _);
+        uniforms.uniform_matrix4(
+            &self.uniforms_names[1],
+            0,
+            self.m_view.view_matrix.as_ptr() as _,
+        );
+        uniforms.uniform_matrix4(&self.uniforms_names[2], 0, self.m_model.as_ptr() as _);
 
-    pub fn update_uniforms(&mut self) -> &mut Self {
-        for program in self.programs.iter_mut() {
+        self
+    }
+    pub fn update_uniforms(&mut self, idx: Option<usize>) -> &mut Self {
+        if let Some(valid_idx) = idx {
+            let program = &mut self.programs[valid_idx];
             //Projection
             // println!("{:?}", self.uniforms_names);
             unsafe {
                 gl::UseProgram(program.program_id);
             }
+            println!("{:?}", self.m_view.eye);
             program.uniform_matrix4(&self.uniforms_names[0], 0, self.m_projection.as_ptr() as _);
             program.uniform_matrix4(
                 &self.uniforms_names[1],
@@ -133,6 +162,26 @@ impl<'a> Camera {
                 self.m_view.view_matrix.as_ptr() as _,
             );
             program.uniform_matrix4(&self.uniforms_names[2], 0, self.m_model.as_ptr() as _);
+        } else {
+            for program in self.programs.iter_mut() {
+                //Projection
+                // println!("{:?}", self.uniforms_names);
+                unsafe {
+                    gl::UseProgram(program.program_id);
+                }
+                println!("{:?}", self.m_view.eye);
+                program.uniform_matrix4(
+                    &self.uniforms_names[0],
+                    0,
+                    self.m_projection.as_ptr() as _,
+                );
+                program.uniform_matrix4(
+                    &self.uniforms_names[1],
+                    0,
+                    self.m_view.view_matrix.as_ptr() as _,
+                );
+                program.uniform_matrix4(&self.uniforms_names[2], 0, self.m_model.as_ptr() as _);
+            }
         }
         self
     }
@@ -221,8 +270,6 @@ impl Default for CameraView {
 impl CameraView {
     pub fn update_matrix(&mut self) -> &mut Self {
         self.view_matrix = nalgebra_glm::look_at(&self.eye, &self.center, &self.up);
-        print!("{:?}",self.view_matrix);
-        println!("{:?}", self.eye);
         self
     }
     pub fn set_eye(&mut self, eye: &Vec3) -> &mut Self {
