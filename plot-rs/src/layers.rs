@@ -15,6 +15,8 @@ pub trait Drawable {
 // }
 
 pub mod MathLayers {
+    use std::sync::{Arc, Mutex};
+
     use nalgebra_glm::{Mat4, Vec3, Vec4};
 
     use crate::{
@@ -110,7 +112,7 @@ pub mod MathLayers {
             coordinates: Option<OrthogonalCoordinates>,
             color_function: ColorFunc,
             static_line: bool,
-        ) -> Self
+        ) -> Arc<Mutex<Box<Self>>>
         where
             LineFunc: Fn(f32) -> Vec3,
             ColorFunc: Fn(f32) -> Vec3,
@@ -177,7 +179,7 @@ pub mod MathLayers {
                 &[GLAttrib::new(0, 3, 6, 0), GLAttrib::new(1, 3, 6, 3)].to_vec(),
                 static_line,
             );
-            Self {
+            Arc::new(Mutex::new(Box::new(Self {
                 number_of_vertices: steps as _,
                 shader: shader,
                 buffer: buffer,
@@ -186,7 +188,7 @@ pub mod MathLayers {
                 } else {
                     None
                 },
-            }
+            })))
         }
         pub fn update_line_function<LineFunc>(
             &mut self,
@@ -235,6 +237,9 @@ pub mod MathLayers {
         }
     }
     impl SceneLayer for LineLayer {
+        fn get_layer(self) -> std::sync::Arc<std::sync::Mutex<Box<dyn SceneLayer>>> {
+            Arc::new(Mutex::new(Box::new(self)))
+        }
         fn bind_camera(&self, camera: &mut crate::camera::Camera) {
             camera.add_program(self.get_program_id());
         }

@@ -19,3 +19,14 @@ typed-builder = "0.18.2"
 [target.'cfg(target_os = "linux")'.dependencies]
 freetype-rs = "0.37.0"
 
+
+[[bin]]
+
+name = "main"
+path = "src/main.rs"
+
+
+[[bin]]
+
+name = "boxed"
+path = "src/boxed_trait.rs"
