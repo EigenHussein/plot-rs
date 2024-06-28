@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex, RwLock};
+
 trait property {
     fn get_property(&self) -> f32;
 }
@@ -33,7 +35,9 @@ impl property for S2 {
 }
 
 fn main() {
+    
     let s2 = S2 { val: 10.0 };
     let s1 = S1 { val: 20.0 };
-    let mut A: Box<dyn property> = Box::new(s1);
+    let s1_arc = Arc::new(Mutex::new(s1));
+    let mut A: Box<dyn property> = Box::new(ref s1);
 }

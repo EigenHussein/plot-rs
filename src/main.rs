@@ -1,12 +1,20 @@
 use glfw::{Action, Context, WindowEvent};
 use nalgebra_glm::Vec3;
 use plot_rs::{
-    buffers::{ArrayBuffer, GLAttrib}, camera::{Camera, CameraProjection, CameraView}, layers::{Drawable, MathLayers::LineLayer}, scene::Scene, shader_builder::{self, RawShader, ShaderBuilder}, window::Window
+    buffers::{ArrayBuffer, GLAttrib},
+    camera::{Camera, CameraProjection, CameraView},
+    layers::{Drawable, MathLayers::LineLayer},
+    scene::{Scene, SceneLayer},
+    shader_builder::{self, RawShader, ShaderBuilder},
+    window::Window,
 };
 
-use std::mem::{size_of, size_of_val};
+use std::{
+    mem::{size_of, size_of_val},
+    sync::{Arc, Mutex},
+};
 
-fn main(){
+fn main() {
     let mut window = Window::default();
 
     let mut my_function = LineLayer::simple_colored_line(
@@ -23,7 +31,9 @@ fn main(){
     );
 
     let mut my_scene = Scene::default();
-    my_scene.add_layer(Box::new(my_function));
+    my_scene.add_layer(my_function.get_layer());
+
+    let mut time = 0.0f32;
 
     while !window.m_window.should_close() {
         window.m_glfw.poll_events();
@@ -31,15 +41,21 @@ fn main(){
         for (_, event) in glfw::flush_messages(&window.m_receiver) {
             update_camera(&event, my_scene.get_camera());
         }
+        my_function.update_line_function(
+            |t| {
+                Vec3::new(0.5, 0.5, 0.5)
+                    + 0.5 * Vec3::new(f32::sin(10.0 * t), f32::sin(15.0 * t), f32::sin(24.0 * t))
+            },
+            0.0,
+            time,
+        );
         my_scene.draw(None);
+        time += 0.004;
         window.m_window.swap_buffers();
-
     }
-
 }
 
 fn main3() {
-
     let mut window = Window::default();
 
     let mut shaderbuilder = ShaderBuilder::default();
@@ -88,8 +104,8 @@ fn main3() {
     );
     cam.set_camera(&Vec3::new(1.0, 1.0, -1.0), &Vec3::zeros(), &Vec3::z())
         .add_program(shader.get_id())
-        .add_program(my_function.shader.get_id());
-        // .update_uniforms(None);
+        .add_program(my_function.get_program_id());
+    // .update_uniforms(None);
 
     let mut z = 0.0f32;
 
@@ -121,7 +137,6 @@ fn main3() {
             my_function.draw_on();
         }
         z += 0.01;
-
 
         window.m_window.swap_buffers();
     }

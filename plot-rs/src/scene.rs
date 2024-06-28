@@ -1,19 +1,51 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    os::raw::c_void,
+    sync::{Arc, Mutex},
+};
 
 use nalgebra_glm::Vec4;
 
-use crate::camera::{Camera, CameraProjection, CameraView};
+use crate::{
+    buffers::ArrayBuffer,
+    camera::{Camera, CameraProjection, CameraView},
+    shader_builder::RawShader,
+};
 
+pub enum DrawCall {
+    // unsafe { gl::DrawArrays(*mode, *first as i32, *count as i32) };
+    Vertex(u32, i32, i32),
+    // unsafe { gl::DrawElements(*mode, *count, *type_, *indices) };
+    Element(u32, i32, u32, *const c_void),
+}
+
+impl DrawCall {
+    pub fn draw(&self) {
+        match self {
+            DrawCall::Vertex(mode, first, count) => {
+                unsafe { gl::DrawArrays(*mode, *first as i32, *count as i32) };
+            }
+            DrawCall::Element(mode, count, type_, indices) => {
+                unsafe { gl::DrawElements(*mode, *count, *type_, *indices) };
+            }
+        }
+    }
+}
+
+pub struct Program {
+    pub shader: RawShader,
+    pub buffer: ArrayBuffer,
+    pub drawcall: DrawCall,
+}
 pub trait SceneLayer {
     fn get_program_id(&self) -> u32;
-    fn get_layer(self) -> Arc<Mutex<Box<dyn SceneLayer>>>;
+    fn get_layer(&self) -> Arc<Mutex<Program>>;
     fn bind_camera(&self, camera: &mut Camera);
     fn draw(&self);
 }
 
 pub struct Scene {
     camera: Camera,
-    layers: Vec<Arc<Mutex<Box<dyn SceneLayer>>>>,
+    layers: Vec<Arc<Mutex<Program>>>,
 }
 
 impl Default for Scene {
@@ -32,14 +64,17 @@ impl Scene {
     pub fn get_camera(&mut self) -> &mut Camera {
         &mut self.camera
     }
-    pub fn add_layer(&mut self, layer: Arc<Mutex<Box<dyn SceneLayer>>>) {
+    pub fn add_layer(&mut self, layer: Arc<Mutex<Program>>) {
         self.camera
-            .add_program(layer.lock().unwrap().get_program_id());
+            .add_program(layer.lock().unwrap().shader.get_id());
         self.layers.push(layer);
     }
     pub fn draw_on(&self) -> &Self {
         for layer in self.layers.iter() {
-            layer.lock().unwrap().draw();
+            let tmp_layer = layer.lock().unwrap();
+            tmp_layer.buffer.vao.bind();
+            tmp_layer.shader.use_shader();
+            tmp_layer.drawcall.draw();
         }
         self
     }

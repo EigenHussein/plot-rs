@@ -21,7 +21,7 @@ pub mod MathLayers {
 
     use crate::{
         buffers::{ArrayBuffer, GLAttrib},
-        scene::SceneLayer,
+        scene::{DrawCall, Program, SceneLayer},
         shader_builder::{RawShader, ShaderAttribute, ShaderAttributeType, ShaderBuilder},
     };
 
@@ -86,8 +86,9 @@ pub mod MathLayers {
 
     pub struct LineLayer {
         // pub shader_builder: ShaderBuilder,
-        pub shader: RawShader,
-        pub buffer: ArrayBuffer,
+        //pub layer: Arc<Mutex<(RawShader, ArrayBuffer)>>,
+        pub layer: Arc<Mutex<Program>>,
+        //pub buffer: ArrayBuffer,
         number_of_vertices: i32,
         pub vertices: Option<Vec<(Vec3, Vec3)>>,
     }
@@ -112,7 +113,8 @@ pub mod MathLayers {
             coordinates: Option<OrthogonalCoordinates>,
             color_function: ColorFunc,
             static_line: bool,
-        ) -> Arc<Mutex<Box<Self>>>
+        ) -> Self
+        //Arc<Mutex<Box<Self>>>
         where
             LineFunc: Fn(f32) -> Vec3,
             ColorFunc: Fn(f32) -> Vec3,
@@ -179,16 +181,31 @@ pub mod MathLayers {
                 &[GLAttrib::new(0, 3, 6, 0), GLAttrib::new(1, 3, 6, 3)].to_vec(),
                 static_line,
             );
-            Arc::new(Mutex::new(Box::new(Self {
+            Self {
                 number_of_vertices: steps as _,
-                shader: shader,
-                buffer: buffer,
+                layer: Arc::new(Mutex::new(Program {
+                    shader: shader,
+                    buffer: buffer,
+                    drawcall: DrawCall::Vertex(gl::LINE_STRIP, 0, steps as _),
+                })),
+                // shader: shader,
+                // buffer: buffer,
                 vertices: if static_line == false {
                     Some(vertices)
                 } else {
                     None
                 },
-            })))
+            }
+            // Arc::new(Mutex::new(Box::new(Self {
+            //     number_of_vertices: steps as _,
+            //     shader: shader,
+            //     buffer: buffer,
+            //     vertices: if static_line == false {
+            //         Some(vertices)
+            //     } else {
+            //         None
+            //     },
+            // })))
         }
         pub fn update_line_function<LineFunc>(
             &mut self,
@@ -205,7 +222,12 @@ pub mod MathLayers {
                     let t = t0 + (t1 - t0) * i as f32 / (n_vertices as f32 - 1.0);
                     vertices[i].0 = funciton(t);
                 }
-                self.buffer.vbo.update_buffer_slice(0, vertices.as_slice());
+                self.layer
+                    .lock()
+                    .unwrap()
+                    .buffer
+                    .vbo
+                    .update_buffer_slice(0, vertices.as_slice());
             }
 
             self
@@ -220,7 +242,12 @@ pub mod MathLayers {
                     let t = i as f32 / (n_vertices as f32 - 1.0);
                     vertices[i].1 = color_func(t);
                 }
-                self.buffer.vbo.update_buffer_slice(0, vertices.as_slice());
+                self.layer
+                    .lock()
+                    .unwrap()
+                    .buffer
+                    .vbo
+                    .update_buffer_slice(0, vertices.as_slice());
             }
 
             self
@@ -229,29 +256,31 @@ pub mod MathLayers {
 
     impl Drawable for LineLayer {
         fn draw_on(&self) {
-            self.shader.use_shader();
-            self.buffer.vao.bind();
+            let program = self.layer.lock().unwrap();
+            program.shader.use_shader();
+            program.buffer.vao.bind();
             unsafe {
                 gl::DrawArrays(gl::LINE_STRIP, 0, self.number_of_vertices);
             }
         }
     }
     impl SceneLayer for LineLayer {
-        fn get_layer(self) -> std::sync::Arc<std::sync::Mutex<Box<dyn SceneLayer>>> {
-            Arc::new(Mutex::new(Box::new(self)))
+        fn get_layer(&self) -> Arc<Mutex<Program>> {
+            self.layer.clone()
         }
         fn bind_camera(&self, camera: &mut crate::camera::Camera) {
             camera.add_program(self.get_program_id());
         }
         fn draw(&self) {
-            self.shader.use_shader();
-            self.buffer.vao.bind();
+            let program = self.layer.lock().unwrap();
+            program.shader.use_shader();
+            program.buffer.vao.bind();
             unsafe {
                 gl::DrawArrays(gl::LINE_STRIP, 0, self.number_of_vertices);
             }
         }
         fn get_program_id(&self) -> u32 {
-            self.shader.get_id()
+            self.layer.lock().unwrap().shader.get_id()
         }
     }
     pub struct LineLayerConfiguration {}
