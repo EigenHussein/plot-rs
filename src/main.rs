@@ -18,7 +18,7 @@ fn main() {
     let mut window = Window::default();
 
     let mut my_function = LineLayer::simple_colored_line(
-        |t| Vec3::new(f32::sin(1.0 * t), f32::sin(1.0 * t), f32::sin(2.0 * t)),
+        |t| Vec3::new(f32::sin(1.0 * t), f32::sin(1.0 * t), f32::sin(2.0 * t)) * 0.0,
         0.0,
         5.0,
         4000,
@@ -34,23 +34,51 @@ fn main() {
     my_scene.add_layer(my_function.get_layer());
 
     let mut time = 0.0f32;
+    unsafe {
+        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+        gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+    }
+    for row in 0..4 {
+        for col in 0..4 {
+            my_function.update_line_function(
+                |t| {
+                    0.5 * Vec3::new(
+                        f32::sin(10.0 * t),
+                        f32::sin(15.25 * t),
+                        0.0 * f32::sin(24.0 * t),
+                    )
+                },
+                0.0,
+                time,
+            );
+
+            time += 0.4;
+            unsafe {
+                gl::Viewport(col * 256, row * 256, 256, 256);
+            }
+            my_function.draw_on();
+        }
+    }
 
     while !window.m_window.should_close() {
         window.m_glfw.poll_events();
 
-        for (_, event) in glfw::flush_messages(&window.m_receiver) {
-            update_camera(&event, my_scene.get_camera());
-        }
-        my_function.update_line_function(
-            |t| {
-                Vec3::new(0.5, 0.5, 0.5)
-                    + 0.5 * Vec3::new(f32::sin(10.0 * t), f32::sin(15.0 * t), f32::sin(24.0 * t))
-            },
-            0.0,
-            time,
-        );
-        my_scene.draw(None);
-        time += 0.004;
+        // for (_, event) in glfw::flush_messages(&window.m_receiver) {
+        //     update_camera(&event, my_scene.get_camera());
+        // }
+        // my_function.update_line_function(
+        //     |t| {
+        //         0.5 * Vec3::new(
+        //             f32::sin(10.0 * t),
+        //             f32::sin(15.25 * t),
+        //             0.0 * f32::sin(24.0 * t),
+        //         )
+        //     },
+        //     0.0,
+        //     time,
+        // );
+        // my_scene.draw(None);
+        // time += 0.04;
         window.m_window.swap_buffers();
     }
 }

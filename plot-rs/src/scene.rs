@@ -16,6 +16,8 @@ pub enum DrawCall {
     Vertex(u32, i32, i32),
     // unsafe { gl::DrawElements(*mode, *count, *type_, *indices) };
     Element(u32, i32, u32, *const c_void),
+    // Special
+    Custom(Box<dyn Fn()->()>)
 }
 
 impl DrawCall {
@@ -26,6 +28,9 @@ impl DrawCall {
             }
             DrawCall::Element(mode, count, type_, indices) => {
                 unsafe { gl::DrawElements(*mode, *count, *type_, *indices) };
+            }
+            DrawCall::Custom(custom_call)=>{
+                custom_call();
             }
         }
     }

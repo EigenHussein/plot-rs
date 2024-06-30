@@ -181,12 +181,16 @@ pub mod MathLayers {
                 &[GLAttrib::new(0, 3, 6, 0), GLAttrib::new(1, 3, 6, 3)].to_vec(),
                 static_line,
             );
+
             Self {
                 number_of_vertices: steps as _,
                 layer: Arc::new(Mutex::new(Program {
                     shader: shader,
                     buffer: buffer,
-                    drawcall: DrawCall::Vertex(gl::LINE_STRIP, 0, steps as _),
+                    drawcall: DrawCall::Custom(Box::new(move || unsafe {
+                        gl::LineWidth(1.0);
+                        gl::DrawArrays(gl::LINE_STRIP, 0, steps as _)
+                    })), //DrawCall::Vertex(gl::LINE_STRIP, 0, steps as _),
                 })),
                 // shader: shader,
                 // buffer: buffer,
