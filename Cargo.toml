@@ -16,6 +16,11 @@ serde_json = "1.0.117"
 plot-rs = {path = "plot-rs"}
 typed-builder = "0.18.2"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+freetype-sys = {version="0.21.0", features = ["bundled"] }
+freetype-rs = "0.37.0"
+
+
 [target.'cfg(target_os = "linux")'.dependencies]
 freetype-rs = "0.37.0"
 
@@ -28,5 +33,5 @@ path = "src/main.rs"
 
 [[bin]]
 
-name = "boxed"
-path = "src/boxed_trait.rs"
+name = "freetype"
+path = "src/freetype_test.rs"
