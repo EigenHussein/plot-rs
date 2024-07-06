@@ -10,4 +10,7 @@ pub mod camera;
 
 pub mod buffers;
 pub mod vertex_generator;
+
+pub mod textures;
+pub mod texts;
 // pub mod opengl-core;

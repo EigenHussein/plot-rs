@@ -507,8 +507,9 @@ impl ShaderBuilder {
 
     pub fn add_vertex2fragment_link(
         &mut self,
-        out_attrib: ShaderAttribute,
         vertex_variable: String,
+        out_attrib: ShaderAttribute,
+       
     ) -> &mut Self {
         self.vertex_fragment_links
             .push((out_attrib, vertex_variable));
@@ -522,6 +523,17 @@ impl ShaderBuilder {
     pub fn set_color_assignment(&mut self, new_color_assignment: ColorAssignment) -> &mut Self {
         self.fragment_color_assignment = new_color_assignment;
         self
+    }
+
+    pub fn empty()->Self{
+        Self {
+            vertex_shader_input_attributes: None,
+            vertex_shader_uniforms: Vec::new(),
+            vertex_transformation: VertexTransformation::ProjectionView,
+            vertex_fragment_links: Vec::new(),
+            fragment_shader_uniforms: Vec::new(),
+            fragment_color_assignment: ColorAssignment::Solid(1.0, 0.5, 0.25, 1.0),
+        }
     }
 }
 

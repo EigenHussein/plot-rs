@@ -138,12 +138,13 @@ pub mod MathLayers {
                 ))
                 .set_color_assignment(crate::shader_builder::ColorAssignment::PerVertex)
                 .add_vertex2fragment_link(
+                    "color".to_string(),
                     ShaderAttribute::new_output_attribute(
                         None,
                         "v_col".to_string(),
                         ShaderAttributeType::Vec3,
                     ),
-                    "color".to_string(),
+                    
                 )
                 .set_vertex_transformation(
                     crate::shader_builder::VertexTransformation::ProjectionView,

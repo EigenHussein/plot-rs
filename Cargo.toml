@@ -35,3 +35,9 @@ path = "src/main.rs"
 
 name = "freetype"
 path = "src/freetype_test.rs"
+
+
+[[bin]]
+
+name = "texture_example"
+path = "src/texture_example.rs"
