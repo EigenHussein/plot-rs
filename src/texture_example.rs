@@ -38,53 +38,167 @@ pub fn get_quad() -> [(Vec4, Vec4, Vec2); 4] {
     quad_vertices
 }
 
-fn text2image(text: &str, font: Face, font_size: u32) -> GrayImage {
-    font.set_pixel_sizes(0, font_size).unwrap();
-    let mut width = 0;
-    let mut y_high = -10000;
-    let mut y_low = 10000;
-    for c in text.chars() {
-        font.load_char(c as _, LoadFlag::RENDER).unwrap();
-        let metrics = font.glyph().metrics();
-        font.glyph().clone();
-        width += metrics.horiAdvance >> 6;
-        y_high = y_high.max(metrics.horiBearingY >> 6);
-        y_low = y_low.min((metrics.height >> 6) - (metrics.horiBearingY >> 6));
-    }
-    let mut img = image::GrayImage::new(100+width as u32, 100+(y_high - y_low) as u32);
-    let mut advance = 0;
-    for c in text.chars() {
-        font.load_char(c as _, LoadFlag::RENDER).unwrap();
-        let metrics = font.glyph().metrics();
-        let bitmap = font.glyph().bitmap();
-        let rows = bitmap.rows();
-        let cols = bitmap.width();
+fn conv266_to_i32(int266: i64) -> i64 {
+    println!("{}: {:b}", int266, int266);
+    let abs_val = (int266 & 0x7FFFFFFF_FFFFFFFF) >> 6;
+    let sign = if int266 as u64 & 0x80000000_00000000 != 0 {
+        -1
+    } else {
+        1
+    };
+    return abs_val * sign;
+}
 
-        let r0 = y_high - (metrics.horiBearingY >> 6);
-        let c0 = advance + (metrics.horiBearingX >> 6);
+fn text2image(text: &str, font: Face, font_size: u32) -> GrayImage {
+    font.set_pixel_sizes(0, font_size);
+
+    let mut x_right = 0;
+
+    let mut y0 = 0i32;
+    let mut y1 = 0i32;
+    for ch in text.chars() {
+        font.load_char(ch as _, LoadFlag::RENDER);
+        let char_metrics = font.glyph().metrics();
+        x_right += char_metrics.horiAdvance - char_metrics.horiBearingX;
+        y0 = y0.max((char_metrics.horiBearingY >> 6) as i32);
+        y1 = y1.max((char_metrics.height >> 6) as i32 - (char_metrics.horiBearingY >> 6) as i32);
+        // let current_down = 2 * (char_metrics.height >> 6) - (char_metrics.horiBearingY >> 6);
+        // if current_down > y_down {
+        //     y_down = current_down;
+        //     origin=y_down -((char_metrics.height>>6) - (char_metrics.horiBearingY >> 6) );
+        // }
+        // y_down = y_down.max();
+    }
+    let y_down = y0 + y1;
+
+    let mut img = GrayImage::new((x_right >> 6) as u32 + 100, y_down as u32 + 100);
+    let mut advances = 0u32;
+    for ch in text.chars() {
+        font.load_char(ch as _, LoadFlag::RENDER).unwrap();
+        let glyph_bitmap = font.glyph().bitmap();
+        let glyph_metrics = font.glyph().metrics();
+        let rows = glyph_bitmap.rows() as u32;
+        let cols = glyph_bitmap.width() as u32;
+
+        print!(
+            r"
+            Width: {}
+            Height: {}
+            Advance: {}
+            xBearing: {}
+            yBearing: {}
+            len: {}
+            ",
+            /* conv266_to_i32 */ (glyph_metrics.width),
+            /* conv266_to_i32 */ (glyph_metrics.height),
+            /* conv266_to_i32 */ (glyph_metrics.horiAdvance),
+            /* conv266_to_i32 */ (glyph_metrics.horiBearingX),
+            /* conv266_to_i32 */ (glyph_metrics.horiBearingY),
+            /* conv266_to_i32 */ (glyph_metrics.horiAdvance - glyph_metrics.horiBearingX)
+        );
 
         for r in 0..rows {
             for c in 0..cols {
-                img[( (c0 + c) as u32,(r0 + r) as u32)] = Luma {
-                    0: [bitmap.buffer()[(bitmap.width() * r + c) as usize]],
-                };
+                img.put_pixel(
+                    advances + c,
+                    y0 as u32 - (glyph_metrics.horiBearingY >> 6) as u32 + r,
+                    Luma([glyph_bitmap.buffer()[(r * glyph_bitmap.width() as u32 + c) as usize]]),
+                );
             }
         }
-
-        advance += metrics.horiAdvance >> 6;
+        advances += (glyph_metrics.horiAdvance >> 6) as u32;
     }
-    return img;
+    println!("{:?}", (x_right, y_down));
+
+    img
 }
+#[cfg(target_os = "windows")]
+static FONT_PATH: &'static str = "C:\\Users\\Haloc\\Dev\\Rust\\plot-rs\\cambriaz.ttf";
+#[cfg(target_os = "linux")]
+static FONT_PATH: &'static str = "/home/hussein/Dev/Rust/plotters/cambriaz.ttf";
 
 //testing text generation
 
+fn text2image2(text: &str, font: Face, font_size: u32) -> GrayImage {
+    font.set_pixel_sizes(0, font_size);
+    let mut texture_width = 0;
+    let mut texture_height = 0;
+    let mut yl = -100000;
+    let mut yh = -100000;
+    for ch in text.chars() {
+        font.load_char(ch as _, LoadFlag::RENDER).unwrap();
+        let glyph_metrics = font.glyph().metrics();
+        texture_width += glyph_metrics.horiAdvance; //+ glyph_metrics.horiBearingX;
+        yh = yh.max(glyph_metrics.horiBearingY);
+        yl = yl.max(glyph_metrics.height - glyph_metrics.horiBearingY) //yl.max(-glyph_metrics.horiBearingY);
+    }
+
+    texture_width = (texture_width >> 6) + 40;
+    texture_height = (yh + yl) >> 6;
+
+    // {
+    //     let mut advance = 0;
+    //     for ch in text.chars() {
+    //         font.load_char(ch as _, LoadFlag::RENDER).unwrap();
+    //         let glyph_metrics = font.glyph().metrics();
+    //         let glyph_bitmap = font.glyph().bitmap();
+    //         let c0 = ((advance + glyph_metrics.horiBearingX) >> 6) as i32;
+    //         let r0 = ((yh - glyph_metrics.horiBearingY) >> 6) as i32;
+    //         let cols = glyph_bitmap.width();
+    //         let rows = glyph_bitmap.rows();
+
+    //         for r in 0..rows as i32 {
+    //             for c in 0..cols as i32 {
+    //                 let ptr =
+    //                     &mut texture_image[((c + c0) as u32, (r + r0) as u32)] as *mut _ as *mut u8;
+    //                 unsafe {
+    //                     *ptr += glyph_bitmap.buffer()[(r * glyph_bitmap.width() + c) as usize]
+    //                 };
+    //                 // = Luma {
+    //                 //     0: [glyph_bitmap.buffer()[(r * glyph_bitmap.width() + c) as usize]],
+    //                 // };
+    //             }
+    //         }
+
+    //         advance += glyph_metrics.horiAdvance;
+    //     }
+    //     println!("{:?}", (texture_width, texture_height));
+    // }
+
+    let mut texture_image = GrayImage::new(texture_width as u32, texture_height as u32);
+
+    let mut advance = 0;
+    for ch in text.chars() {
+        font.load_char(ch as _, LoadFlag::RENDER).unwrap();
+        let glyph_metrics = font.glyph().metrics();
+        let glyph_bitmap = font.glyph().bitmap();
+        let c0 = ((advance + glyph_metrics.horiBearingX) >> 6) as i32;
+        let r0 = ((yh - glyph_metrics.horiBearingY) >> 6) as i32;
+        let cols = glyph_bitmap.width();
+        let rows = glyph_bitmap.rows();
+
+        for r in 0..rows as i32 {
+            for c in 0..cols as i32 {
+                let ptr =
+                    &mut texture_image[((c + c0) as u32, (r + r0) as u32)] as *mut _ as *mut u8;
+                unsafe { *ptr += glyph_bitmap.buffer()[(r * glyph_bitmap.width() + c) as usize] };
+                // = Luma {
+                //     0: [glyph_bitmap.buffer()[(r * glyph_bitmap.width() + c) as usize]],
+                // };
+            }
+        }
+
+        advance += glyph_metrics.horiAdvance;
+    }
+    println!("{:?}", (texture_width, texture_height));
+    texture_image
+}
+
 fn main() {
     let ft_lib = Library::init().unwrap();
-    let face = ft_lib
-        .new_face("C:\\Users\\Haloc\\Dev\\Rust\\plot-rs\\cambriaz.ttf", 0)
-        .unwrap();
-
-    let img = text2image("Hello fnkh 989f", face, 200); //text2image("Hello, World", face, 20);
+    let face = ft_lib.new_face(FONT_PATH, 0).unwrap();
+ 
+    let img = text2image2("  f(x=100)", face, 120); //text2image("Hello, World", face, 20);
     img.save("tmp.jpg");
 }
 
