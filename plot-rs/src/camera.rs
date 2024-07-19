@@ -3,6 +3,7 @@ use std::{
     ffi::{c_void, CString},
 };
 
+use glfw::{Action, WindowEvent};
 use nalgebra_glm::{Mat4, Vec3, Vec4};
 
 use crate::shader_builder::ShaderUniforms;
@@ -184,6 +185,49 @@ impl<'a> Camera {
             }
         }
         self
+    }
+
+    pub fn update_camera(ev: &WindowEvent, camera_instance: &mut Camera) {
+        match ev {
+            WindowEvent::Key(key, scancode, action, modifier) => {
+                let act = *action;
+                if *action == Action::Repeat || *action == Action::Press {
+                    match *key {
+                        glfw::Key::A => {
+                            camera_instance
+                                .get_camera_view()
+                                .increase_azimuth(0.02)
+                                .update_matrix();
+                            camera_instance.update_uniforms(None);
+                        }
+                        glfw::Key::D => {
+                            camera_instance
+                                .get_camera_view()
+                                .decrease_azimuth(0.02)
+                                .update_matrix();
+                            camera_instance.update_uniforms(None);
+                        }
+                        glfw::Key::W => {
+                            camera_instance
+                                .get_camera_view()
+                                .increase_altitude(0.02)
+                                .update_matrix();
+                            camera_instance.update_uniforms(None);
+                        }
+                        glfw::Key::S => {
+                            camera_instance
+                                .get_camera_view()
+                                .decrease_altitude(0.02)
+                                .update_matrix();
+                            camera_instance.update_uniforms(None);
+                        }
+
+                        _ => {}
+                    };
+                }
+            }
+            _ => {}
+        };
     }
 }
 

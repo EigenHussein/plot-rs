@@ -194,7 +194,7 @@ fn text2image2(text: &str, font: Face, font_size: u32) -> GrayImage {
     texture_image
 }
 
-fn main() {
+fn main2() {
     let ft_lib = Library::init().unwrap();
     let face = ft_lib.new_face(FONT_PATH, 0).unwrap();
  
@@ -202,13 +202,12 @@ fn main() {
     img.save("tmp.jpg");
 }
 
-fn main2() {
+fn main() {
     let mut window = Window::default();
 
     let ft_lib = Library::init().unwrap();
-    let face = ft_lib
-        .new_face("C:\\Users\\Haloc\\Dev\\Rust\\plot-rs\\cambriaz.ttf", 0)
-        .unwrap();
+    let face = ft_lib.new_face(FONT_PATH, 0).unwrap();
+ 
 
     let img = FreeTypeGenerator::text2image("HelloWorld", face, 20);
 
@@ -328,7 +327,7 @@ fn main2() {
         window.m_glfw.poll_events();
 
         unsafe {
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::ClearColor(0.1, 0.1, 0.1, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             gl::UseProgram(shade.get_id());
             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as _);

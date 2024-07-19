@@ -139,7 +139,7 @@ impl FreeTypeGenerator {
         y_higher = y_higher >> 6;
         y_lower = y_lower >> 6;
         let full_height = (y_higher) - (y_lower);
-        let mut image = GrayImage::new(full_width as _, full_height as _);
+        let mut image = GrayImage::new(200u32 + full_width as u32, 200u32 + full_height as u32);
 
         let mut advances = 0u32;
         for ch in text.chars() {
