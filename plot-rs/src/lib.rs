@@ -9,7 +9,7 @@ pub mod layers;
 pub mod camera;
 
 pub mod buffers;
-pub mod vertex_generator;
+pub mod shapes;
 
 pub mod textures;
 pub mod texts;
