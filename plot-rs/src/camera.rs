@@ -28,10 +28,14 @@ impl<'a> Default for Camera {
                 CString::new("Model").unwrap(),
             ],
             m_projection: nalgebra_glm::Mat4::identity(),
-            m_view: CameraView {
-                view_matrix: nalgebra_glm::Mat4::identity(),
-                ..Default::default()
-            },
+            m_view: *CameraView::default()
+                .set_center(&Vec3::zeros())
+                .set_eye(&Vec3::new(1.0, 1.0, 1.0))
+                .set_up(&Vec3::z()),
+            // CameraView {
+            //     view_matrix: nalgebra_glm::Mat4::identity(),
+            //     ..Default::default()
+            // },
             m_model: nalgebra_glm::Mat4::identity(),
         }
     }
@@ -289,7 +293,7 @@ impl CameraProjection {
         Self::perspective(aspect, fov, 0.001, 100.0)
     }
 }
-
+#[derive(Clone, Copy)]
 pub struct CameraView {
     view_matrix: nalgebra_glm::Mat4,
     eye: nalgebra_glm::Vec3,
