@@ -47,3 +47,8 @@ path = "src/texture_example.rs"
 
 name = "shapes"
 path = "src/shapes.rs"
+
+[[bin]]
+
+name = "hdr"
+path = "src/hdr_test.rs"
