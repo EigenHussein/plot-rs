@@ -1,6 +1,10 @@
+use gl::types::GLint;
 use nalgebra_glm::{Mat4, Vec2, Vec4};
 
-use crate::{buffers::GLAttrib, camera::{Camera, CameraProjection, CameraView}};
+use crate::{
+    buffers::GLAttrib,
+    camera::{Camera, CameraProjection, CameraView}, shader_builder::RawShader,
+};
 
 pub struct Texture {
     texture_id: u32,
@@ -205,8 +209,6 @@ impl Drop for Texture {
     }
 }
 
-
-
 pub struct FrameBuffer {
     pub fbo: u32,
     pub rbo_depth: u32,
@@ -226,10 +228,10 @@ impl FrameBuffer {
                 gl::LINEAR_MIPMAP_LINEAR as _,
             ); // Trilinear filtering
                //    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR  as _);
             // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR_MIPMAP_LINEAR as _);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as _);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as _);
+            // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as _);
+            // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as _);
         }
     }
 
@@ -254,25 +256,18 @@ impl FrameBuffer {
                 gl::FLOAT,
                 0 as _,
             );
-            // // Texture::texture_set_default_parameters();
-            // // gl::TexParameteri(
-            // //     gl::TEXTURE_2D,
-            // //     gl::TEXTURE_MIN_FILTER,
-            // //     gl::LINEAR_MIPMAP_LINEAR as _,
-            // // );
-            // gl::TexParameteri(
-            //     gl::TEXTURE_2D,
-            //     gl::TEXTURE_MIN_FILTER,
-            //     gl::LINEAR_MIPMAP_LINEAR as _,
-            // ); // Trilinear filtering
-            //    // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
-            // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
-            // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::REPEAT as _);
-            // gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as _);
-            Self::texture_set_default_parameters();
-
-            // Trilinear filtering
-            // gl::BindTexture(gl::TEXTURE_2D, 0);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(
+                gl::TEXTURE_2D,
+                gl::TEXTURE_WRAP_S,
+                gl::CLAMP_TO_EDGE as GLint,
+            );
+            gl::TexParameteri(
+                gl::TEXTURE_2D,
+                gl::TEXTURE_WRAP_T,
+                gl::CLAMP_TO_EDGE as GLint,
+            );
         }
         texture
     }
@@ -328,15 +323,13 @@ impl FrameBuffer {
         unsafe {
             fbo = Self::framebuffer_generate();
             println!("Generated FBO");
-
+            texture = Self::texture_generate(width, height, None, None);
+            Self::texture_set_default_parameters();
             // Generate and bind RBO with multisampling
             (rbo_depth, rbo_color) = Self::renderbuffer_generate(width, height, true);
 
             // gl::GenTextures(1, &mut texture);
             println!("Generated Render Buffer");
-
-            texture = Self::texture_generate(width, height, None, None);
-            Self::texture_set_default_parameters();
 
             // gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, texture, 0);
 
@@ -361,6 +354,112 @@ impl FrameBuffer {
             width: width,
         }
     }
+
+    pub fn new2(width: i32, height: i32) -> Self {
+        unsafe {
+            let mut fbo = 0;
+            let mut rbo = 0;
+            let mut tex = 0;
+
+            gl::GenFramebuffers(1, &mut fbo);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, fbo);
+
+            gl::GenRenderbuffers(1, &mut rbo);
+            gl::BindRenderbuffer(gl::RENDERBUFFER, rbo);
+            //gl::RenderbufferStorage(gl::RENDERBUFFER, gl::RGBA16F, width, height);
+            gl::RenderbufferStorageMultisample(gl::RENDERBUFFER, 16, gl::RGBA16F, width, height);
+
+            gl::FramebufferRenderbuffer(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::RENDERBUFFER,
+                rbo,
+            );
+
+            let mut rbo_depth = 0;
+            gl::GenRenderbuffers(1, &mut rbo_depth);
+            gl::BindRenderbuffer(gl::RENDERBUFFER, rbo_depth);
+            //gl::RenderbufferStorage(gl::RENDERBUFFER, gl::DEPTH_COMPONENT, width, height);
+            gl::RenderbufferStorageMultisample(
+                gl::RENDERBUFFER,
+                16,
+                gl::DEPTH_COMPONENT,
+                width,
+                height,
+            );
+            gl::FramebufferRenderbuffer(
+                gl::FRAMEBUFFER,
+                gl::DEPTH_ATTACHMENT,
+                gl::RENDERBUFFER,
+                rbo_depth,
+            );
+
+            if gl::CheckFramebufferStatus(gl::FRAMEBUFFER) != gl::FRAMEBUFFER_COMPLETE {
+                panic!("Framebuffer not complete!");
+            }
+
+            gl::GenTextures(1, &mut tex);
+
+            gl::BindTexture(gl::TEXTURE_2D, tex);
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA16F as _,
+                width,
+                height,
+                0,
+                gl::RGBA as _,
+                gl::FLOAT,
+                0 as _,
+            );
+            FrameBuffer::texture_set_default_parameters();
+
+            let mut fbo_tex = 0;
+            gl::GenFramebuffers(1, &mut fbo_tex);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, fbo_tex);
+            gl::FramebufferTexture2D(
+                gl::FRAMEBUFFER,
+                gl::COLOR_ATTACHMENT0,
+                gl::TEXTURE_2D,
+                tex,
+                0,
+            );
+            if gl::CheckFramebufferStatus(gl::FRAMEBUFFER) != gl::FRAMEBUFFER_COMPLETE {
+                panic!("Framebuffer not complete!");
+            }
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            Self {
+                fbo: fbo,
+                fbo_texture: fbo_tex,
+                rbo_depth: rbo_depth,
+                rbo_color: rbo,
+                destination_texture: tex,
+                width: width,
+                height: height,
+            }
+        }
+    }
+
+    pub fn bint_to_texture(&self) -> u32 {
+        unsafe {
+            gl::BindFramebuffer(gl::READ_FRAMEBUFFER, self.fbo);
+            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.fbo_texture);
+            gl::BlitFramebuffer(
+                0,
+                0,
+                self.width,
+                self.height,
+                0,
+                0,
+                self.width,
+                self.height,
+                gl::COLOR_BUFFER_BIT,
+                gl::LINEAR,
+            );
+        }
+        self.destination_texture
+    }
+
     pub fn bind(&self) {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.fbo);
@@ -373,152 +472,154 @@ impl FrameBuffer {
     }
 }
 
-// pub struct VirtualScreen {
-//     pub shader: BasicShader,
-//     camera: Camera,
-//     pub frame_buffer: FrameBuffer,
-//     pub simple_fbo: u32,
-//     pub simple_tx: u32,
-// }
 
-// impl VirtualScreen {
-//     pub fn get_quad() -> [(Vec4, Vec4, Vec2); 4] {
-//         let quad_vertices = [
-//             (
-//                 Vec4::new(-1.0, -1.0, 0.0, 1.0),
-//                 Vec4::new(1.0, 1.0, 1.0, 1.0),
-//                 Vec2::new(0.0, 0.0),
-//             ),
-//             (
-//                 Vec4::new(-1.0, 1.0, 0.0, 1.0),
-//                 Vec4::new(1.0, 0.0, 0.0, 1.0),
-//                 Vec2::new(0.0, 1.0),
-//             ),
-//             (
-//                 Vec4::new(1.0, 1.0, 0.0, 1.0),
-//                 Vec4::new(0.0, 1.0, 0.0, 1.0),
-//                 Vec2::new(1.0, 1.0),
-//             ),
-//             (
-//                 Vec4::new(1.0, -1.0, 0.0, 1.0),
-//                 Vec4::new(0.0, 0.0, 1.0, 1.0),
-//                 Vec2::new(1.0, 0.0),
-//             ),
-//         ];
-//         quad_vertices
-//     }
-//     pub fn new(width: i32, height: i32) -> Self {
-//         let quad_vertices = Self::get_quad();
-//         let indices = [0, 1, 2, 0, 2, 3];
 
-//         let mut texture_prog =
-//             BasicShader::new(ShaderCreator::new(shaders::ColorMode::ColorBloom, false).program_id);
-//         let mut cam = Camera::new(
-//             CameraProjection::default_perspective(1.0, 1.5),
-//             CameraView::default(),
-//         );
+pub struct VirtualScreen {
+    pub shader: u32,
+    camera: Camera,
+    pub frame_buffer: FrameBuffer,
+    pub simple_fbo: u32,
+    pub simple_tx: u32,
+}
 
-//         texture_prog.buffer.allocateBuffer(
-//             quad_vertices.as_ptr() as _,
-//             std::mem::size_of_val(&quad_vertices) as _,
-//         );
-//         println!(
-//             "sizes: {}\t{}",
-//             std::mem::size_of_val(&indices),
-//             std::mem::size_of_val(&quad_vertices)
-//         );
-//         texture_prog
-//             .buffer
-//             .allocateElements(indices.as_ptr() as _, std::mem::size_of_val(&indices) as _);
-//         texture_prog.buffer.setAttributes(&vec![
-//             GLAttrib::new(0, 4, 10, 0),
-//             GLAttrib::new(1, 4, 10, 4),
-//             GLAttrib::new(3, 2, 10, 8),
-//         ]);
+impl VirtualScreen {
+    pub fn get_quad() -> [(Vec4, Vec4, Vec2); 4] {
+        let quad_vertices = [
+            (
+                Vec4::new(-1.0, -1.0, 0.0, 1.0),
+                Vec4::new(1.0, 1.0, 1.0, 1.0),
+                Vec2::new(0.0, 0.0),
+            ),
+            (
+                Vec4::new(-1.0, 1.0, 0.0, 1.0),
+                Vec4::new(1.0, 0.0, 0.0, 1.0),
+                Vec2::new(0.0, 1.0),
+            ),
+            (
+                Vec4::new(1.0, 1.0, 0.0, 1.0),
+                Vec4::new(0.0, 1.0, 0.0, 1.0),
+                Vec2::new(1.0, 1.0),
+            ),
+            (
+                Vec4::new(1.0, -1.0, 0.0, 1.0),
+                Vec4::new(0.0, 0.0, 1.0, 1.0),
+                Vec2::new(1.0, 0.0),
+            ),
+        ];
+        quad_vertices
+    }
+    // pub fn new(width: i32, height: i32) -> Self {
+    //     let quad_vertices = Self::get_quad();
+    //     let indices = [0, 1, 2, 0, 2, 3];
 
-//         cam.add_program(texture_prog.get_program());
-//         cam.set_projection_matrix(Mat4::identity());
-//         cam.set_view_matrix(Mat4::identity());
+    //     let mut texture_prog =
+    //         BasicShader::new(ShaderCreator::new(shaders::ColorMode::ColorBloom, false).program_id);
+    //     let mut cam = Camera::new(
+    //         CameraProjection::default_perspective(1.0, 1.5),
+    //         CameraView::default(),
+    //     );
 
-//         let virtualframe = FrameBuffer::new(width, height);
+    //     texture_prog.buffer.allocateBuffer(
+    //         quad_vertices.as_ptr() as _,
+    //         std::mem::size_of_val(&quad_vertices) as _,
+    //     );
+    //     println!(
+    //         "sizes: {}\t{}",
+    //         std::mem::size_of_val(&indices),
+    //         std::mem::size_of_val(&quad_vertices)
+    //     );
+    //     texture_prog
+    //         .buffer
+    //         .allocateElements(indices.as_ptr() as _, std::mem::size_of_val(&indices) as _);
+    //     texture_prog.buffer.setAttributes(&vec![
+    //         GLAttrib::new(0, 4, 10, 0),
+    //         GLAttrib::new(1, 4, 10, 4),
+    //         GLAttrib::new(3, 2, 10, 8),
+    //     ]);
 
-//         cam.update_uniforms(None);
+    //     cam.add_program(texture_prog.get_program());
+    //     cam.set_projection_matrix(Mat4::identity());
+    //     cam.set_view_matrix(Mat4::identity());
 
-//         let (mut s_fbo, mut s_tex) = (0u32, 0u32);
-//         unsafe {
-//             gl::GenFramebuffers(1, &mut s_fbo);
-//             gl::BindFramebuffer(gl::FRAMEBUFFER, s_fbo);
-//             gl::GenTextures(1, &mut s_tex);
-//             gl::BindTexture(gl::TEXTURE_2D, s_tex);
-//             gl::TexImage2D(
-//                 gl::TEXTURE_2D,
-//                 0,
-//                 gl::RGBA16F as _,
-//                 width,
-//                 height,
-//                 0,
-//                 gl::RGBA,
-//                 gl::FLOAT,
-//                 0 as _,
-//             );
-//             FrameBuffer::texture_set_default_parameters();
-//             gl::FramebufferTexture2D(
-//                 gl::FRAMEBUFFER,
-//                 gl::COLOR_ATTACHMENT0,
-//                 gl::TEXTURE_2D,
-//                 s_tex,
-//                 0,
-//             );
-//             gl::BindTexture(gl::TEXTURE_2D, 0);
-//             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-//         }
+    //     let virtualframe = FrameBuffer::new(width, height);
 
-//         Self {
-//             shader: texture_prog,
-//             camera: cam,
-//             frame_buffer: virtualframe,
-//             simple_fbo: s_fbo,
-//             simple_tx: s_tex,
-//         }
-//     }
-//     pub fn render_new_to_frame_buffer<T>(&self, mut render_call: T)
-//     where
-//         T: FnMut() -> (),
-//     {
-//         unsafe {
-//             gl::BindFramebuffer(gl::FRAMEBUFFER, self.frame_buffer.fbo);
-//             // gl::Viewport(0, 0, self.frame_buffer.width, self.frame_buffer.height);
-//             // gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-//             // gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-//             // gl::UseProgram(self.shader.program);
-//             render_call();
-//             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+    //     cam.update_uniforms(None);
 
-//             gl::BlitNamedFramebuffer(
-//                 self.frame_buffer.fbo,
-//                 self.simple_fbo,
-//                 0,
-//                 0,
-//                 1024,
-//                 1024,
-//                 0,
-//                 0,
-//                 1024,
-//                 1024,
-//                 gl::COLOR_BUFFER_BIT,
-//                 gl::LINEAR,
-//             );
+    //     let (mut s_fbo, mut s_tex) = (0u32, 0u32);
+    //     unsafe {
+    //         gl::GenFramebuffers(1, &mut s_fbo);
+    //         gl::BindFramebuffer(gl::FRAMEBUFFER, s_fbo);
+    //         gl::GenTextures(1, &mut s_tex);
+    //         gl::BindTexture(gl::TEXTURE_2D, s_tex);
+    //         gl::TexImage2D(
+    //             gl::TEXTURE_2D,
+    //             0,
+    //             gl::RGBA16F as _,
+    //             width,
+    //             height,
+    //             0,
+    //             gl::RGBA,
+    //             gl::FLOAT,
+    //             0 as _,
+    //         );
+    //         FrameBuffer::texture_set_default_parameters();
+    //         gl::FramebufferTexture2D(
+    //             gl::FRAMEBUFFER,
+    //             gl::COLOR_ATTACHMENT0,
+    //             gl::TEXTURE_2D,
+    //             s_tex,
+    //             0,
+    //         );
+    //         gl::BindTexture(gl::TEXTURE_2D, 0);
+    //         gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+    //     }
 
-//             gl::ActiveTexture(gl::TEXTURE0);
-//             gl::BindTexture(gl::TEXTURE_2D, self.simple_tx);
-//             gl::GenerateMipmap(gl::TEXTURE_2D);
+    //     Self {
+    //         shader: texture_prog,
+    //         camera: cam,
+    //         frame_buffer: virtualframe,
+    //         simple_fbo: s_fbo,
+    //         simple_tx: s_tex,
+    //     }
+    // }
+    // pub fn render_new_to_frame_buffer<T>(&self, mut render_call: T)
+    // where
+    //     T: FnMut() -> (),
+    // {
+    //     unsafe {
+    //         gl::BindFramebuffer(gl::FRAMEBUFFER, self.frame_buffer.fbo);
+    //         // gl::Viewport(0, 0, self.frame_buffer.width, self.frame_buffer.height);
+    //         // gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+    //         // gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+    //         // gl::UseProgram(self.shader.program);
+    //         render_call();
+    //         gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
 
-//             gl::ClearColor(0.01, 0.01, 0.01, 1.0);
-//             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-//             gl::UseProgram(self.shader.program);
-//             self.shader.buffer.bindAB();
-//             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as _);
-//             // gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as _);
-//         }
-//     }
-// }
+    //         gl::BlitNamedFramebuffer(
+    //             self.frame_buffer.fbo,
+    //             self.simple_fbo,
+    //             0,
+    //             0,
+    //             1024,
+    //             1024,
+    //             0,
+    //             0,
+    //             1024,
+    //             1024,
+    //             gl::COLOR_BUFFER_BIT,
+    //             gl::LINEAR,
+    //         );
+
+    //         gl::ActiveTexture(gl::TEXTURE0);
+    //         gl::BindTexture(gl::TEXTURE_2D, self.simple_tx);
+    //         gl::GenerateMipmap(gl::TEXTURE_2D);
+
+    //         gl::ClearColor(0.01, 0.01, 0.01, 1.0);
+    //         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+    //         gl::UseProgram(self.shader.program);
+    //         self.shader.buffer.bindAB();
+    //         gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as _);
+    //         // gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as _);
+    //     }
+    // }
+}
