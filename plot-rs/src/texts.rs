@@ -545,8 +545,8 @@ impl FreeTypeAtlas {
 
         let mut advance = 0.0f32;
         for (idx, ch) in text.chars().enumerate() {
-            let X = Vec3::new(1.0, 0.0, idx as f32 / 100.0) * size;
-            let Y = Vec3::new(0.0, 1.0, idx as f32 / 100.0) * size;
+            let X = Vec3::new(1.0, 0.0, idx as f32 / 10000.0) * size;
+            let Y = Vec3::new(0.0, 1.0, idx as f32 / 10000.0) * size;
             let current_char = self.metrics_vector[ch as usize];
             //  p1 ... p2
             //  .       .

@@ -146,7 +146,7 @@ fn main() {
             // buffer.vao.bind();
             // buffer.vbo.bind();
 
-            gl::DrawArrays(gl::TRIANGLES, 0, 30);
+            gl::DrawArrays(gl::TRIANGLES, 0, text.len() as _);
         }
 
         window.m_window.swap_buffers();
