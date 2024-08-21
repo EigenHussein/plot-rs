@@ -10,6 +10,7 @@ pub mod camera;
 
 pub mod buffers;
 pub mod shapes;
+pub mod coord2d;
 
 pub mod textures;
 pub mod texts;
