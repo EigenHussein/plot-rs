@@ -509,7 +509,6 @@ impl ShaderBuilder {
         &mut self,
         vertex_variable: String,
         out_attrib: ShaderAttribute,
-       
     ) -> &mut Self {
         self.vertex_fragment_links
             .push((out_attrib, vertex_variable));
@@ -525,7 +524,7 @@ impl ShaderBuilder {
         self
     }
 
-    pub fn empty()->Self{
+    pub fn empty() -> Self {
         Self {
             vertex_shader_input_attributes: None,
             vertex_shader_uniforms: Vec::new(),
@@ -560,6 +559,9 @@ impl Default for ShaderBuilder {
 
 pub struct RawShader(u32);
 impl RawShader {
+    pub fn wrap(prog_id: u32) -> Self {
+        Self(prog_id)
+    }
     pub fn get_id(&self) -> u32 {
         self.0
     }
@@ -572,6 +574,7 @@ impl RawShader {
 
 impl Drop for RawShader {
     fn drop(&mut self) {
+        println!("Dropping RawShader");
         unsafe {
             gl::DeleteProgram(self.0);
         }

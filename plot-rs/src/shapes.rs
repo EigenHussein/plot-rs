@@ -64,6 +64,12 @@ pub mod Shapes {
 
     use gl::types;
     use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
+
+    use crate::{
+        buffers::{ArrayBuffer, GLAttrib},
+        camera::Camera,
+        shader_builder::{shader::CompileProgram, RawShader},
+    };
     #[derive(Clone, Copy, Debug)]
     pub struct ShapeDrawCall {
         pub(crate) mode: types::GLenum,
@@ -412,6 +418,333 @@ pub mod Shapes {
         Shape {
             vertices: sorted_vertices,
             draw_calls: draw_calls,
+        }
+    }
+
+    pub struct DynamicLineFunction {
+        buffer: ArrayBuffer,
+        program: RawShader,
+        steps: u32,
+    }
+
+    impl DynamicLineFunction {
+        pub fn bind_camera(&mut self, cam: &mut Camera) -> &mut Self {
+            cam.add_program(self.program.get_id());
+            cam.update_uniforms(None);
+            self
+        }
+        pub fn draw_on(&self, line_width: f32) {
+            unsafe {
+                gl::LineWidth(line_width);
+                gl::UseProgram(self.program.get_id());
+                self.buffer.vao.bind();
+                self.buffer.vbo.bind();
+                gl::DrawArrays(gl::LINE_STRIP, 0, self.steps as _);
+            }
+        }
+        fn default_program() -> RawShader {
+            RawShader::wrap(CompileProgram(
+                "shaders/shapes/vertex.glsl",
+                "shaders/shapes/fragment.glsl",
+                None,
+            ))
+        }
+        pub fn generate_shape<LineFunc, ColorFunc>(
+            line_function: LineFunc,
+            t0: f32,
+            t1: f32,
+            steps: u32,
+            color_func: ColorFunc,
+        ) -> Shape
+        where
+            LineFunc: Fn(f32) -> Vec4,
+            ColorFunc: Fn(f32) -> Vec4,
+        {
+            let mut vertices = Vec::<ShapeVertexType>::with_capacity(steps as usize);
+            for i in 0..steps {
+                let t = t0 + (t1 - t0) * i as f32 / (steps as f32 - 1.0);
+                vertices.push((line_function(t), color_func(t), Vec2::zeros()));
+            }
+            Shape {
+                vertices: vertices,
+                draw_calls: [ShapeDrawCall::new_line_strip(0, steps as i32)].to_vec(),
+            }
+        }
+        // fn generate_vertices
+        pub fn new<LineFunc, ColorFunc>(
+            line_function: LineFunc,
+            t0: f32,
+            t1: f32,
+            steps: u32,
+            color_func: ColorFunc,
+        ) -> Self
+        where
+            LineFunc: Fn(f32) -> Vec4,
+            ColorFunc: Fn(f32) -> Vec4,
+        {
+            // let mut vertices = Vec::<ShapeVertexType>::with_capacity(steps as usize);
+            // for i in 0..steps {
+            //     let t = t0 + (t1 - t0) * i as f32 / (steps as f32);
+            //     vertices.push((line_function(t), color_func(t), Vec2::zeros()));
+            // }
+
+            let line_shape = Self::generate_shape(line_function, t0, t1, steps, color_func);
+
+            let mut buffer = ArrayBuffer::default_buffer_from_slice(
+                &line_shape.vertices,
+                None,
+                &[
+                    GLAttrib::new(0, 4, 10, 0),
+                    GLAttrib::new(1, 4, 10, 4),
+                    GLAttrib::new(2, 2, 10, 8),
+                ]
+                .to_vec(),
+                true,
+            );
+            Self {
+                buffer: buffer,
+                program: Self::default_program(),
+                steps: steps,
+            }
+        }
+
+        pub fn update_line_inplace<LineFunc>(
+            &mut self,
+            line_function: LineFunc,
+            t0: f32,
+            t1: f32,
+        ) -> &mut Self
+        where
+            LineFunc: Fn(f32) -> Vec4,
+        {
+            unsafe {
+                let buf = std::slice::from_raw_parts_mut::<ShapeVertexType>(
+                    gl::MapNamedBuffer(self.buffer.vbo.unwrap_buffer(), gl::WRITE_ONLY) as _,
+                    self.steps as _,
+                );
+                for i in 0..self.steps as usize {
+                    let t = t0 + (t1 - t0) * i as f32 / (self.steps as f32 - 1.0);
+                    buf[i].0 = line_function(t);
+                }
+                gl::UnmapNamedBuffer(self.buffer.vbo.unwrap_buffer());
+            }
+
+            self
+        }
+
+        // pub fn update_function<LineFunc>(
+        //     &mut self,
+        //     line_function: LineFunc,
+        //     t0: f32,
+        //     t1: f32,
+        // ) -> &mut Self
+        // where
+        //     LineFunc: Fn(f32) -> Vec4,
+        // {
+        //     let b
+        //     self
+        // }
+    }
+}
+
+pub mod Surfaces {
+    use nalgebra_glm::{Vec2, Vec4};
+
+    use crate::{
+        buffers::{ArrayBuffer, GLAttrib},
+        camera::Camera,
+        shader_builder::{shader::CompileProgram, RawShader},
+    };
+
+    use super::Shapes::{Shape, ShapeDrawCall, ShapeVertexType};
+
+    pub struct ParametricSurface {
+        program: RawShader,
+        buffer: ArrayBuffer,
+        steps: (u32, u32),
+        number_of_indices: u32,
+    }
+    impl ParametricSurface {
+        pub fn bind_camera(&mut self, cam: &mut Camera) -> &mut Self {
+            cam.add_program(self.program.get_id());
+            cam.update_uniforms(None);
+            self
+        }
+        pub fn draw_on(&self) {
+            unsafe {
+                // gl::LineWidth(line_width);
+                gl::UseProgram(self.program.get_id());
+                self.buffer.vao.bind();
+                self.buffer.vbo.bind();
+                self.buffer.ebo.bind();
+                //gl::DrawArrays(gl::TRIANGLES, 0, self.number_of_vertices as _);
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    self.number_of_indices as _,
+                    gl::UNSIGNED_INT,
+                    0 as _,
+                );
+            }
+        }
+        fn default_program() -> RawShader {
+            RawShader::wrap(CompileProgram(
+                "shaders/shapes/vertex.glsl",
+                "shaders/shapes/fragment.glsl",
+                None,
+            ))
+        }
+        // fn generate_grid_indices(width: usize, height: usize) -> Vec<u32> {
+        //     let mut indices = Vec::new();
+
+        //     for y in 0..(height - 1) {
+        //         for x in 0..(width - 1) {
+        //             let top_left = (y * width + x) as u32;
+        //             let top_right = (y * width + x + 1) as u32;
+        //             let bottom_left = ((y + 1) * width + x) as u32;
+        //             let bottom_right = ((y + 1) * width + x + 1) as u32;
+
+        //             // First triangle
+        //             indices.push(top_left);
+        //             indices.push(bottom_left);
+        //             indices.push(top_right);
+
+        //             // Second triangle
+        //             indices.push(top_right);
+        //             indices.push(bottom_left);
+        //             indices.push(bottom_right);
+        //         }
+        //     }
+
+        //     indices
+        // }
+        pub fn generate_surface_indices(usteps: u32, vsteps: u32) -> Vec<u32> {
+            let number_of_indices = ((usteps) * (vsteps)) * 6;
+            let mut indices: Vec<u32> = Vec::with_capacity(number_of_indices as usize);
+
+            for v in 0..vsteps {
+                for u in 0..usteps {
+                    let current_index = v * (usteps + 1) + u;
+
+                    //Triangle 1
+                    indices.push(current_index);
+                    indices.push(current_index + 1 + usteps + 1);
+                    indices.push(current_index + 1);
+
+                    //Triangle 2
+                    indices.push(current_index);
+                    indices.push(current_index + usteps + 1);
+                    indices.push(current_index + 1 + usteps + 1);
+                }
+            }
+
+            indices
+        }
+        // pub fn generate_shape<LineFunc, ColorFunc>(
+        //     line_function: LineFunc,
+        //     u: (f32, f32),
+        //     v: (f32, f32),
+        //     steps: (u32, u32),
+        //     color_func: ColorFunc,
+        // ) -> Shape
+        // where
+        //     LineFunc: Fn(f32, f32) -> Vec4,
+        //     ColorFunc: Fn(f32, f32) -> Vec4,
+        // {
+        //     let mut vertices = Vec::<ShapeVertexType>::with_capacity(steps as usize);
+        //     // for i in 0..steps {
+        //     //     let t = t0 + (t1 - t0) * i as f32 / (steps as f32 - 1.0);
+        //     //     vertices.push((line_function(t), color_func(t), Vec2::zeros()));
+        //     // }
+        //     Shape {
+        //         vertices: vertices,
+        //         draw_calls: [ShapeDrawCall::new_line_strip(0, steps as i32)].to_vec(),
+        //     }
+        // }
+        // fn generate_vertices
+        pub fn new<SurfFunc, ColorFunc>(
+            surface_function: SurfFunc,
+            u: (f32, f32),
+            v: (f32, f32),
+            steps: (u32, u32),
+            color_func: ColorFunc,
+        ) -> Self
+        where
+            SurfFunc: Fn(f32, f32) -> Vec4,
+            ColorFunc: Fn(f32, f32) -> Vec4,
+        {
+            //let line_shape = Self::generate_shape(line_function, t0, t1, steps, color_func);
+
+            let du = (u.1 - u.0) / ((steps.0) as f32);
+            let dv = (v.1 - v.0) / ((steps.1) as f32);
+
+            let mut vertices: Vec<ShapeVertexType> =
+                Vec::with_capacity(((steps.0 + 1) * (steps.1 + 1) * 6) as usize);
+
+            for v_idx in 0..steps.1 + 1 {
+                let v = v.0 + dv * v_idx as f32;
+                for u_idx in 0..steps.0 + 1 {
+                    let u = u.0 + du * u_idx as f32;
+                    vertices.push((surface_function(u, v), color_func(u, v), Vec2::zeros()));
+                }
+            }
+
+            let indices = Self::generate_surface_indices(steps.0, steps.1);
+
+            let mut buffer = ArrayBuffer::default_buffer_from_slice(
+                &vertices,
+                Some(indices.as_slice()),
+                &[
+                    GLAttrib::new(0, 4, 10, 0),
+                    GLAttrib::new(1, 4, 10, 4),
+                    GLAttrib::new(2, 2, 10, 8),
+                ]
+                .to_vec(),
+                true,
+            );
+            Self {
+                buffer: buffer,
+                program: Self::default_program(),
+                steps: steps,
+                number_of_indices: indices.len() as _,
+            }
+        }
+
+        pub fn update_surface_inplace<SurfFunc>(
+            &mut self,
+            surface_function: SurfFunc,
+            u: (f32, f32),
+            v: (f32, f32),
+        ) -> &mut Self
+        where
+            SurfFunc: Fn(f32, f32) -> Vec4,
+        {
+            unsafe {
+                let buf = std::slice::from_raw_parts_mut::<ShapeVertexType>(
+                    gl::MapNamedBuffer(self.buffer.vbo.unwrap_buffer(), gl::WRITE_ONLY) as _,
+                    self.number_of_indices as _,
+                );
+
+                let du = (u.1 - u.0) / ((self.steps.0) as f32);
+                let dv = (v.1 - v.0) / ((self.steps.1) as f32);
+
+                // let mut vertices: Vec<ShapeVertexType> =
+                //     Vec::with_capacity(((steps.0 + 1) * (steps.1 + 1) * 6) as usize);
+
+                for v_idx in 0..self.steps.1 + 1 {
+                    let v = v.0 + dv * v_idx as f32;
+                    for u_idx in 0..self.steps.0 + 1 {
+                        let u = u.0 + du * u_idx as f32;
+                        // vertices.push((surface_function(u, v), color_func(u, v), Vec2::zeros()));
+                        let vertex_idx = (u_idx + v_idx * (self.steps.0 + 1)) as usize;
+                        buf[vertex_idx].0 = surface_function(u, v);
+                        // buf[vertex_idx] = (surface_function(u, v), color_func(u, v), Vec2::zeros());
+                    }
+                }
+
+                gl::UnmapNamedBuffer(self.buffer.vbo.unwrap_buffer());
+            }
+
+            self
         }
     }
 }

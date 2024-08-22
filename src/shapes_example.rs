@@ -1,24 +1,33 @@
 use std::default;
 
-use glfw::Context;
+use glfw::{ffi::glfwGetTime, Context};
 
 use nalgebra_glm::{Vec2, Vec3, Vec4};
 use plot_rs::{
-    buffers::{ArrayBuffer, GLAttrib}, camera::Camera, coord2d::{ArrowLocation, XYCoordinates}, shader_builder::shader::CompileProgram, shapes::{
+    buffers::{ArrayBuffer, GLAttrib},
+    camera::Camera,
+    coord2d::{ArrowLocation, XYCoordinates},
+    shader_builder::{shader::CompileProgram, RawShader},
+    shapes::{
         self,
-        Shapes::{self, combine_triangles_level0, Quad, Shape, ShapeVertexType},
-        TwoDim,
-    }, window::Window
+        Shapes::{
+            self, combine_triangles_level0, DynamicLineFunction, Quad, Shape, ShapeDrawCall,
+            ShapeVertexType,
+        },
+        Surfaces, TwoDim,
+    },
+    window::Window,
 };
 use Shapes::{combine_triangles_level1, Circle, DrawableShape};
+
 // TODO Add more shapes
-
-
-
 fn main() {
     let mut window = Window::default();
     unsafe {
         gl::Disable(gl::CULL_FACE);
+        gl::Enable(gl::BLEND);
+        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+        gl::DepthMask(gl::TRUE);
     }
 
     let coords = XYCoordinates::builder()
@@ -28,25 +37,59 @@ fn main() {
         .density((11, 11))
         .line_width(0.01)
         .seco_color(Vec4::new(1.0, 1.0, 1.0, 0.2))
-        .arrow_specification((0.1, 0.02, 0.04))
+        .arrow_specification((0.1, 0.02, 0.16))
         .arrow_location(ArrowLocation::Center)
         .arrow_color(Vec4::new(1.0, 1.0, 1.0, 0.9))
         .build()
         .generate_shape();
 
-    for vert in coords.vertices.iter().enumerate() {
-        println!("{:?}", vert);
-    }
+    unsafe { gl::LineWidth(3.0) };
+    let mut line_function = DynamicLineFunction::new(
+        |t| Vec4::new(t.cos(), (0.37 * t).sin(), f32::sin(10.0 * f32::cos(t)), 1.0),
+        0.0,
+        6.0 * 3.141592653,
+        10000,
+        |t| {
+            Vec4::new(
+                0.5 + 0.5 * f32::sin(t),
+                0.5 + 0.5 * f32::cos(t),
+                0.75 + 0.25 * f32::cos(t),
+                1.0,
+            )
+        },
+    );
+
+    let mut surface_function = Surfaces::ParametricSurface::new(
+        |u, v| Vec4::new(u, v, (-u.powi(2) - v.powi(2)).exp(), 1.0),
+        (-2.0, 2.0),
+        (-2.0, 2.0),
+        (1000, 1000),
+        |u, v| {
+            Vec4::new(
+                1.0 + 0.5 * f32::sin(u),
+                1.0 + 0.5 * f32::sin(v),
+                1.0 + 0.5 * f32::sin(v + u),
+                1.0 - (u.powi(2) + v.powi(2)).sqrt() / 4.0,
+            )
+        },
+    );
 
     let mut cam = Camera::default();
     cam.set_perspective(1.0, 1.5, 0.01, 100.0);
+    cam.get_camera_view()
+        .set_eye(&Vec3::new(2.0, 2.0, 2.0))
+        .update_matrix();
+
     let program = CompileProgram(
         "shaders/shapes/vertex.glsl",
         "shaders/shapes/fragment.glsl",
         None,
     );
+    line_function.bind_camera(&mut cam);
+    surface_function.bind_camera(&mut cam);
     cam.add_program(program).update_uniforms(None);
-    let shapes = coords;
+    let shapesb = coords;
+
     //  Quad::new_from_two_points(
     //     &Vec2::new(0.0, -0.50),
     //     &Vec2::new(0.0, 0.50),
@@ -54,6 +97,8 @@ fn main() {
     //     &Vec3::new(1.0, 0.5, 0.35),
     // )
     // .generate_shape(0);
+
+    let shapes = combine_triangles_level1([shapesb].to_vec());
 
     //let shapes = generate_arrow(Vec2::zeros(), Vec2::y(), 0.1, 0.01, 0.02); //generate_shape();
     let vertex_count = shapes.vertices.len().clone();
@@ -70,10 +115,41 @@ fn main() {
         true,
     );
 
+    let t0 = unsafe { glfwGetTime() };
     while !window.m_window.should_close() {
         window.m_glfw.poll_events();
         for (_, event) in glfw::flush_messages(&window.m_receiver) {
             Camera::update_camera(&event, &mut cam);
+        }
+        unsafe {
+            let tm = (glfwGetTime() - t0) as f32;
+            line_function.update_line_inplace(
+                |t| {
+                    Vec4::new(
+                        f32::cos(0.1 * tm + t),
+                        f32::cos(0.314 * tm + t),
+                        f32::cos(0.6 * tm * t),
+                        1.0,
+                    )
+                },
+                0.0,
+                2.0 * 3.1415926,
+            );
+            surface_function.update_surface_inplace(
+                |u, v| {
+                    Vec4::new(
+                        u,
+                        v,
+                        0.5 + {
+                            let r = (u.powi(2) + v.powi(2)).sqrt();
+                            f32::sin((2.0 + tm) * r).powi(2) * f32::exp(-2.1 * r)
+                        },
+                        1.0,
+                    )
+                },
+                (-1.0, 1.0),
+                (-1.0, 1.0),
+            );
         }
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
@@ -82,6 +158,10 @@ fn main() {
             shapes_buffer.vao.bind();
             shapes_buffer.vbo.bind();
             shapes.draw();
+            gl::DepthMask(gl::FALSE);
+            line_function.draw_on(2.0);
+            surface_function.draw_on();
+            gl::DepthMask(gl::TRUE);
         }
         window.m_window.swap_buffers();
     }

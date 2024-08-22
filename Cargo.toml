@@ -46,7 +46,7 @@ path = "src/texture_example.rs"
 [[bin]]
 
 name = "shapes"
-path = "src/shapes.rs"
+path = "src/shapes_example.rs"
 
 [[bin]]
 

@@ -81,6 +81,9 @@ impl Default for VAO {
     }
 }
 impl VAO {
+    pub fn unwrap_buffer(&self) -> u32 {
+        self.vao.unwrap()
+    }
     fn new() -> Self {
         let mut vao = 0;
         unsafe {
@@ -148,6 +151,9 @@ impl Default for VBO {
     }
 }
 impl VBO {
+    pub unsafe fn unwrap_buffer(&self) -> u32 {
+        self.vbo.unwrap()
+    }
     pub fn array_buffer_from_slice<VertexStructure>(
         vertices: &[VertexStructure],
         static_buffer: bool,
