@@ -67,20 +67,28 @@ fn generate_text_texture(
         // x_max = x_max.max(x1);
         // y_min = y_min.min(y0);
         // y_max = y_max.max(y1);
-        // let bitmap = glyph.bitmap().buffer().as_ptr();
+        let bitmap = glyph.bitmap().buffer().as_ptr();
         for y in 0..processed_metrics.height {
             for x in 0..processed_metrics.width {
                 let x_val = (x0 + x_offset + x) as u32;
                 let y_val = (y0 + y) as u32;
-                
-                let current_pixel = 
-                output_texture[(x_val, y_val)] = Luma {
-                    0: [
-                        output_texture[(x_val, y_val)].0[0]+ glyph.bitmap().buffer()[(y * processed_metrics.width + x) as usize], /* unsafe {
-                                                                                                 *bitmap.add((y_val * processed_metrics.width as u32 + x_val) as usize)
-                                                                                             } */
-                    ],
-                };
+
+                let current_pixel = &mut output_texture[(x_val, y_val)].0[0];
+
+                *current_pixel = *current_pixel
+                    + unsafe { *bitmap.add((y * processed_metrics.width + x) as usize) };
+
+                // let current_pixel =
+                // output_texture[(x_val, y_val)] = Luma {
+                //     0: [
+                //         output_texture[(x_val, y_val)].0[0]+
+                //         //  glyph.bitmap().buffer()[(y * processed_metrics.width + x) as usize],
+
+                //           unsafe {
+                //                                                                                  *bitmap.add((y * processed_metrics.width + x) as usize)
+                //                                                                              }
+                //     ],
+                // };
             }
         }
         advance += processed_metrics.horiAdvance;
