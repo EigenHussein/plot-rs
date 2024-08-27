@@ -123,11 +123,11 @@ impl VAO {
 }
 impl Drop for VAO {
     fn drop(&mut self) {
-        print_error("Dropped VAO");
         if self.vao.is_some() {
             unsafe {
                 gl::DeleteVertexArrays(1, &self.vao.unwrap());
             }
+            print_error("Dropped VAO");
         }
     }
 }
@@ -269,8 +269,12 @@ impl VBO {
 
 impl Drop for VBO {
     fn drop(&mut self) {
-        print_error("Dropped VBO!");
-        unsafe { gl::DeleteBuffers(1, &self.vbo.expect("None intialized VBO")) }
+        if let Some(initalized_vbo) = self.vbo {
+            unsafe { gl::DeleteBuffers(1, &initalized_vbo) }
+            println!("Dropped VBO!");
+        } else {
+            print_error("Unintialized VBO!");
+        }
     }
 }
 
