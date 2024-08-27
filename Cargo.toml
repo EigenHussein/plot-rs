@@ -49,6 +49,10 @@ name = "shapes"
 path = "src/shapes_example.rs"
 
 [[bin]]
-
 name = "hdr"
 path = "src/hdr_test.rs"
+
+
+[[bin]]
+name = "text_generator"
+path = "src/text_texture_generator.rs"
