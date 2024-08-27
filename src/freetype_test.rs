@@ -1,7 +1,3 @@
-#[cfg(target_os = "windows")]
-static FONT_PATH: &'static str = "C:\\Users\\Haloc\\Dev\\Rust\\plot-rs\\cambriaz.ttf";
-#[cfg(target_os = "linux")]
-static FONT_PATH: &'static str = "/home/hussein/Dev/Rust/plotters/cambriaz.ttf";
 
 use std::{
     alloc::{alloc, Layout}, ffi::c_long, time::{Duration, Instant}
@@ -14,7 +10,7 @@ use plot_rs::{
     buffers::{ArrayBuffer, GLAttrib}, camera::{Camera, CameraProjection, CameraView}, shader_builder::{
         shader::{CompileProgram, CompileProgramFromString},
         ColorAssignment, ShaderAttribute, ShaderAttributeType, ShaderBuilder,
-    }, shaders, texts::TextGenerator2, textures::Texture, window::Window
+    }, shaders, texts::TextGenerator, textures::Texture, window::Window, FONT_PATH
 };
 
 
@@ -25,14 +21,17 @@ fn main() {
     unsafe {
         gl::Enable(gl::BLEND);
         gl::BlendFunci(0, gl::ONE, gl::ONE);
-        gl::BlendFunci(1, gl::ZERO, gl::ONE_MINUS_SRC_COLOR);
+        gl::BlendFunci(1, gl::ONE, gl::ONE_MINUS_SRC_COLOR);
     }
 
     let ft_lib = Library::init().unwrap();
     let face = ft_lib.new_face(FONT_PATH, 0).unwrap();
 
-    let text_gen = TextGenerator2::new(&face, 100);
+    let text_gen = TextGenerator::new(&face, 100);
 
+    text_gen.generate_text_texture("Hello World124 f(x)").0.save("hw.png").unwrap();
+
+    // return ;
     let atlas = text_gen.generate_normalized_atlas();
     let text = atlas.generate_text("f(x)=x^2", 5.0);
     println!("{:?}", text);
@@ -157,14 +156,14 @@ fn main2() {
     let freetype_library = freetype::library::Library::init().unwrap();
     let face = freetype_library.new_face(FONT_PATH, 0).unwrap();
 
-    let chars = TextGenerator2::new(&face, 100);
+    let chars = TextGenerator::new(&face, 100);
     let mut char_counter = 0;
     let a = Instant::now();
     // println!("{:?}", chars.generate_text("Hello World"));
 
     for i in 0..100 {
         let t = i as f32 / 99.0;
-        let tmp = chars.generate_text(format!("f({t})=sin=sin=sin=sin({t})").as_str());
+        let tmp = chars.generate_text_texture(format!("f({t})=sin=sin=sin=sin({t})").as_str());
         char_counter += tmp.1;
     }
 

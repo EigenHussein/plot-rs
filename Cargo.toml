@@ -56,3 +56,8 @@ path = "src/hdr_test.rs"
 [[bin]]
 name = "text_generator"
 path = "src/text_texture_generator.rs"
+
+
+[[bin]]
+name = "features"
+path = "src/features_testing.rs"

@@ -1,12 +1,14 @@
 use std::default;
 
+use freetype::Face;
 use glfw::{ffi::glfwGetTime, Context};
 
 use nalgebra_glm::{Vec2, Vec3, Vec4};
 use plot_rs::{
     buffers::{ArrayBuffer, GLAttrib},
-    camera::Camera,
+    camera::{self, Camera, CameraProjection, CameraView},
     coord2d::{ArrowLocation, XYCoordinates},
+    coordinate_mapping::Coordinate,
     shader_builder::{shader::CompileProgram, RawShader},
     shapes::{
         self,
@@ -16,13 +18,68 @@ use plot_rs::{
         },
         Surfaces, TwoDim,
     },
+    texts::{TextBoxes, TextGenerator},
+    textures::Texture,
     window::Window,
 };
 use Shapes::{combine_triangles_level1, Circle, DrawableShape};
 
-// TODO Add more shapes
 fn main() {
     let mut window = Window::default();
+
+    unsafe {
+        gl::Disable(gl::CULL_FACE);
+        gl::Enable(gl::BLEND);
+        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+        gl::DepthMask(gl::TRUE);
+    }
+
+    let program = CompileProgram(
+        "shaders/shapes/vertex.glsl",
+        "shaders/shapes/fragment.glsl",
+        None,
+    );
+
+    let text_program = CompileProgram(
+        "shaders/textures/vertex.glsl",
+        "shaders/textures/fragment.glsl",
+        None,
+    );
+
+    let mut cam = Camera::new(
+        CameraProjection::default_perspective(1.0, 1.5),
+        CameraView::default(),
+    );
+
+    let freetype_lib = freetype::Library::init().unwrap();
+    let font = freetype_lib.new_face("cambriaz.ttf", 0).unwrap();
+
+    let mut texts = TextBoxes::new(text_program, font, 300);
+    texts.add_text("Hello World", 1.0, Coordinate::default());
+    // texts.add_text("Hello World", 5.0, 100, "cambriaz.ttf", None, None);
+    texts.update_array_buffer();
+
+    texts.add_camera(&mut cam);
+
+    while !window.m_window.should_close() {
+        window.m_glfw.poll_events();
+
+        for (_, event) in glfw::flush_messages(&window.m_receiver) {
+            Camera::update_camera(&event, &mut cam);
+        }
+        unsafe {
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            texts.draw_textures();
+        }
+        window.m_window.swap_buffers();
+    }
+}
+
+// TODO Add more shapes
+fn main_dynamic_shapes() {
+    let mut window = Window::default();
+
     unsafe {
         gl::Disable(gl::CULL_FACE);
         gl::Enable(gl::BLEND);
@@ -69,10 +126,15 @@ fn main() {
                 1.0 + 0.5 * f32::sin(u),
                 1.0 + 0.5 * f32::sin(v),
                 1.0 + 0.5 * f32::sin(v + u),
-                1.0 - (u.powi(2) + v.powi(2)).sqrt() / 4.0,
+                1.0 - (u.powi(2) + v.powi(2)).sqrt() / 2.0,
             )
         },
     );
+
+    let lib = freetype::Library::init().unwrap();
+    let face = lib.new_face("cambriaz.ttf", 0).unwrap();
+    let mut tg = TextGenerator::new(&face, 100);
+    let img = tg.generate_text_texture("Dynamic Function");
 
     let mut cam = Camera::default();
     cam.set_perspective(1.0, 1.5, 0.01, 100.0);
