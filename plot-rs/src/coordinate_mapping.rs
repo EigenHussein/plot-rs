@@ -1,5 +1,6 @@
 use nalgebra_glm::{Mat4, Vec2, Vec3, Vec4};
 
+#[derive(Clone, Copy, Debug)]
 pub struct Coordinate {
     // U: Vec3,
     // V:Vec3,
@@ -136,12 +137,10 @@ impl Coordinate {
         self
     }
     // pub fn map_vector_elements_inplace<TYPE,ELEM_VEC_MAP_FUN>(&self,func:ELEM_VEC_MAP_FUN)->&Self
-    
+
     // where ELEM_VEC_MAP_FUN : FnMut()
-    
+
     // {
-
-
 
     //     self
     // }

@@ -8,7 +8,6 @@ use plot_rs::{
     buffers::{ArrayBuffer, GLAttrib},
     camera::Camera,
     shader_builder::{ColorAssignment, ShaderAttribute, ShaderAttributeType, ShaderBuilder},
-    texts::FreeTypeGenerator,
     textures::Texture,
     window::Window,
 };
