@@ -24,7 +24,7 @@ use plot_rs::{
 };
 use Shapes::{combine_triangles_level1, Circle, DrawableShape};
 
-fn main() {
+fn main_simple_text() {
     let mut window = Window::default();
 
     unsafe {
@@ -54,7 +54,7 @@ fn main() {
     let freetype_lib = freetype::Library::init().unwrap();
     let font = freetype_lib.new_face("cambriaz.ttf", 0).unwrap();
 
-    let mut texts = TextBoxes::new(text_program, font, 300);
+    let mut texts = TextBoxes::new(None, font, 300);
     texts.add_text("Hello World", 1.0, Coordinate::default());
     // texts.add_text("Hello World", 5.0, 100, "cambriaz.ttf", None, None);
     texts.update_array_buffer();
@@ -68,7 +68,7 @@ fn main() {
             Camera::update_camera(&event, &mut cam);
         }
         unsafe {
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::ClearColor(0.4, 0.4, 0.4, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             texts.draw_textures();
         }
@@ -77,19 +77,19 @@ fn main() {
 }
 
 // TODO Add more shapes
-fn main_dynamic_shapes() {
-    let mut window = Window::default();
+fn main() {
+    let mut window = Window::new(Some("Cycloid"), Some(1600), Some(900)).unwrap();
 
     unsafe {
-        gl::Disable(gl::CULL_FACE);
-        gl::Enable(gl::BLEND);
-        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-        gl::DepthMask(gl::TRUE);
+        // gl::Disable(gl::CULL_FACE);
+        // gl::Enable(gl::BLEND);
+        // gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+        // gl::DepthMask(gl::TRUE);
     }
 
     let coords = XYCoordinates::builder()
-        .x_range((-5.0, 5.0))
-        .y_range((-5.0, 5.0))
+        .x_range((-3.0, 3.0))
+        .y_range((-3.0, 3.0))
         .xy_subgrid((3, 3))
         .density((11, 11))
         .line_width(0.01)
@@ -133,13 +133,13 @@ fn main_dynamic_shapes() {
 
     let lib = freetype::Library::init().unwrap();
     let face = lib.new_face("cambriaz.ttf", 0).unwrap();
-    let mut tg = TextGenerator::new(&face, 100);
+    let mut tg = TextGenerator::new(&face, 200);
     let img = tg.generate_text_texture("Dynamic Function");
 
     let mut cam = Camera::default();
-    cam.set_perspective(1.0, 1.5, 0.01, 100.0);
+    cam.set_perspective(16.0 / 9.0, 1.25, 0.01, 100.0);
     cam.get_camera_view()
-        .set_eye(&Vec3::new(2.0, 2.0, 2.0))
+        .set_eye(&Vec3::new(0.0, -2.0, 4.0))
         .update_matrix();
 
     let program = CompileProgram(
@@ -177,20 +177,44 @@ fn main_dynamic_shapes() {
         true,
     );
 
+    // ADDING TEXTS
+    let lib = freetype::Library::init().unwrap();
+    let face = lib.new_face("cambriaz.ttf", 0).unwrap();
+    let mut texts = TextBoxes::new(None, face, 100);
+
+    texts.add_text(
+        "A 3D Surface with pathetic opacity :')",
+        0.2,
+        Coordinate::default()
+            .translate(Vec3::new(0.0, 2.0, 0.5))
+            .clone(),
+    );
+    texts.update_array_buffer();
+    texts.add_camera(&mut cam);
+
     let t0 = unsafe { glfwGetTime() };
     while !window.m_window.should_close() {
+        let tm = unsafe { (glfwGetTime() - t0) as f32 };
         window.m_glfw.poll_events();
         for (_, event) in glfw::flush_messages(&window.m_receiver) {
             Camera::update_camera(&event, &mut cam);
         }
+        texts.clear_text();
+        texts.add_text(
+            format!("Hello From The Other Side : {}", tm).as_str(),
+            0.2,
+            Coordinate::default()
+                .translate(Vec3::new(0.0, 2.0, 0.5))
+                .clone(),
+        );
+        texts.update_array_buffer();
         unsafe {
-            let tm = (glfwGetTime() - t0) as f32;
             line_function.update_line_inplace(
                 |t| {
                     Vec4::new(
                         f32::cos(0.1 * tm + t),
-                        f32::cos(0.314 * tm + t),
-                        f32::cos(0.6 * tm * t),
+                        f32::sin(0.314 * tm + t),
+                        f32::cos(0.6 * tm * t + 5.0),
                         1.0,
                     )
                 },
@@ -204,13 +228,13 @@ fn main_dynamic_shapes() {
                         v,
                         0.5 + {
                             let r = (u.powi(2) + v.powi(2)).sqrt();
-                            f32::sin((2.0 + tm) * r).powi(2) * f32::exp(-2.1 * r)
+                            f32::sin((2.0 + tm / 1.0) * r).powi(2) * f32::exp(-2.1 * r)
                         },
                         1.0,
                     )
                 },
-                (-1.0, 1.0),
-                (-1.0, 1.0),
+                (-3.0, 3.0),
+                (-3.0, 3.0),
             );
         }
         unsafe {
@@ -221,9 +245,10 @@ fn main_dynamic_shapes() {
             shapes_buffer.vbo.bind();
             shapes.draw();
             gl::DepthMask(gl::FALSE);
-            line_function.draw_on(2.0);
+            // line_function.draw_on(2.0);
             surface_function.draw_on();
             gl::DepthMask(gl::TRUE);
+            texts.draw_textures();
         }
         window.m_window.swap_buffers();
     }
