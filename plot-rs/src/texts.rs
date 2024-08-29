@@ -2,13 +2,13 @@ use std::ffi::c_long;
 
 use freetype::{face::LoadFlag, Face, GlyphMetrics, Library};
 use image::{GrayImage, Luma};
-use nalgebra_glm::{Vec2, Vec3, Vec4};
+use nalgebra_glm::{vec3_to_vec4, Vec2, Vec3, Vec4};
 
 use crate::{
     buffers::{ArrayBuffer, GLAttrib},
     camera::Camera,
     coordinate_mapping::Coordinate,
-    shader_builder::RawShader,
+    shader_builder::{shader::CompileProgram, RawShader},
     textures::Texture,
 };
 
@@ -26,9 +26,7 @@ impl TextBoxes {
     }
 
     fn simple_quad() -> [(Vec4, Vec4, Vec2); 6] {
-
         // const ZERO : f32 = 0.001;
-        
 
         [
             (
@@ -80,23 +78,21 @@ impl TextBoxes {
         quad.to_vec()
     }
 
-    pub fn new(prog_id: u32, font: Face, pixel_resolution: u32) -> Self {
+    pub fn new(prog_id: Option<u32>, font: Face, pixel_resolution: u32) -> Self {
         Self {
             texts: Vec::new(),
             vertices: Vec::new(),
-            program: RawShader::wrap(prog_id),
+            program: RawShader::wrap(prog_id.unwrap_or(CompileProgram(
+                "shaders/textures/vertex.glsl",
+                "shaders/textures/fragment.glsl",
+                None,
+            ))),
             buffer: ArrayBuffer::default(),
             freetype_generator: TextGenerator::new(&font, pixel_resolution),
         }
     }
 
-    pub fn add_text(
-        &mut self,
-        text_line: &str,
-        height: f32,
-        coordinates: Coordinate,
-
-    ) -> &mut Self {
+    pub fn add_text(&mut self, text_line: &str, height: f32, coordinates: Coordinate) -> &mut Self {
         let text_texture = self.freetype_generator.generate_text_texture(text_line);
         let quad = Self::generate_texture_quad(
             height,
@@ -112,6 +108,11 @@ impl TextBoxes {
 
         self.texts.push(texture);
         self.vertices.extend(quad);
+        self
+    }
+    pub fn clear_text(&mut self)->&mut Self{
+        self.texts.clear();
+        self.vertices.clear();
         self
     }
 
@@ -245,7 +246,7 @@ impl TextGenerator {
             // let glyph = font.glyph();
             // let processed_metrics = CharMetrics::from_freetype_metrics(&glyph.metrics());
             let processed_metrics = &self.characters[ch as usize].metrics;
-            println!("{:?}", processed_metrics);
+            // println!("{:?}", processed_metrics);
             // character's information
             let x0 = advance + processed_metrics.horiBearingX;
             let x1 = x0 + processed_metrics.width;
@@ -413,5 +414,141 @@ impl FreeTypeAtlas {
             advance += current_char.2.horiAdvance;
         }
         vertices
+    }
+}
+
+
+
+
+pub struct DynamicTexts {
+    atlas: FreeTypeAtlas,
+    atlas_texture: Texture,
+    buffer: ArrayBuffer,
+    program: RawShader,
+
+    // array
+    /// Text, Height, Coordinates,
+    texts: Vec<(String, f32, Coordinate)>,
+    capacity: usize,
+    number_of_chars: usize,
+}
+impl DynamicTexts {
+
+    /// ## Description
+    /// Create a dynamic text generator based on font atlas
+    /// 
+    /// ### Example
+    /// 
+    /// ```
+    ///     let mut tboxes = DynamicTexts::new("cambriaz.ttf", 100, 300).unwrap();
+    ///     tboxes
+    ///     .add_text("X Label", 1.0, &Coordinate::default())
+    ///     .add_text(
+    ///         "Y Label",
+    ///         1.0,
+    ///         &Coordinate::default()
+    ///             .rotate_ccw_w(std::f32::consts::PI / 2.00)
+    ///             .clone(),
+    ///     )
+    ///     .update_buffer()
+    ///     .bind_camera(&mut cam);
+    /// ```
+    /// 
+    /// 
+    pub fn new(font_path: &str, resolution: u32, char_capacity: usize) -> Result<Self, ()> {
+        let lib = freetype::Library::init().unwrap();
+        if let Ok(font) = lib.new_face(font_path, 0) {
+            let text_generator = TextGenerator::new(&font, resolution);
+            let atlas = text_generator.generate_normalized_atlas();
+            let atlas_texture_image = atlas.get_atlas_image();
+
+            let texture = Texture::new_mono(
+                atlas_texture_image.width() as _,
+                atlas_texture_image.height() as _,
+                atlas_texture_image.as_ptr(),
+            );
+
+            let mut array_buffer = ArrayBuffer::default_buffer_from_slice(
+                &vec![(Vec4::zeros(), Vec4::zeros(), Vec2::zeros()); 6 * char_capacity],
+                None,
+                &[
+                    GLAttrib::new(0, 4, 10, 0),
+                    GLAttrib::new(1, 4, 10, 4),
+                    GLAttrib::new(2, 2, 10, 8),
+                ]
+                .to_vec(),
+                false,
+            );
+
+            let prog = RawShader::wrap(CompileProgram(
+                "shaders/textures/vertex.glsl",
+                "shaders/textures/fragment.glsl",
+                None,
+            ));
+
+            return Ok(Self {
+                atlas: text_generator.generate_normalized_atlas(),
+                atlas_texture: texture,
+                buffer: array_buffer,
+                program: prog,
+                texts: Vec::new(),
+                capacity: char_capacity,
+                number_of_chars: 0,
+            });
+        }
+
+        Err(())
+    }
+
+    pub fn update_buffer(&mut self) -> &mut Self {
+        unsafe {
+            let ptr = gl::MapNamedBuffer(self.buffer.vbo.unwrap_buffer(), gl::WRITE_ONLY);
+            let mapped_buffer =
+                std::slice::from_raw_parts_mut(ptr as *mut (Vec4, Vec4, Vec2), self.capacity);
+
+            let cap = self.capacity.min(self.number_of_chars);
+            let mut vertex_idx = 0;
+
+            for text_box in self.texts.iter() {
+                let full_text_vertices = 6 * text_box.0.len();
+                if vertex_idx + full_text_vertices > cap * 6 {
+                    break;
+                }
+
+                let vertices = self.atlas.generate_text(text_box.0.as_str(), text_box.1);
+                for i in 0..full_text_vertices {
+                    mapped_buffer[vertex_idx + i] = (
+                        text_box.2.map_3d(&vertices[i].0),
+                        vec3_to_vec4(&vertices[i].1),
+                        vertices[i].2,
+                    );
+                }
+                vertex_idx += full_text_vertices;
+            }
+
+            gl::UnmapNamedBuffer(self.buffer.vbo.unwrap_buffer());
+        }
+
+        self
+    }
+
+    pub fn add_text<'a>(&mut self, text: &'a str, height: f32, coords: &Coordinate) -> &mut Self {
+        self.texts.push((text.to_string(), height, coords.clone()));
+        self.number_of_chars += text.len();
+        self
+    }
+
+    pub fn bind_camera(&mut self, cam: &mut Camera) -> &mut Self {
+        cam.add_program(self.program.get_id());
+        self
+    }
+    pub fn draw_on(&self) {
+        self.program.use_shader();
+        self.buffer.vao.bind();
+        self.buffer.vbo.bind();
+        self.atlas_texture.bind_texture();
+        unsafe {
+            gl::DrawArrays(gl::TRIANGLES, 0, (6 * self.number_of_chars) as _);
+        }
     }
 }
